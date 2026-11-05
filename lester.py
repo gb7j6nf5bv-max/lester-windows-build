@@ -1272,7 +1272,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Referrer-Policy", "no-referrer")   # keeps the access key out of map requests
+        # Map requests say only "http://127.0.0.1:8765/" (OpenStreetMap blocks Edge's map requests
+        # without it), never the page's full address, so a phone's access key isn't sent anywhere
+        self.send_header("Referrer-Policy", "strict-origin")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Cache-Control", "no-store")
         for k, v in extra:
