@@ -1,0 +1,18 @@
+[package]
+name = "lester-launcher"
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Lester.exe: starts Lester for Windows (app\\setup_win.ps1) without a console window"
+
+[[bin]]
+name = "Lester"
+path = "src/main.rs"
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"
