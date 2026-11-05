@@ -150,23 +150,50 @@ def open_window():
     return subprocess.Popen(window_command(edge), creationflags=NO_WINDOW)
 
 
+def window_processes():
+    """Edge processes showing Lester's window (they all carry Lester's own Edge profile).
+    Edge can hand the window over to another of its processes, so the one we started
+    isn't a reliable sign the window is open."""
+    import psutil
+    profile = f"--user-data-dir={STATE_DIR / 'window'}".lower()
+    found = []
+    for p in psutil.process_iter(["name", "cmdline"]):
+        try:
+            if (p.info["name"] or "").lower() == "msedge.exe" and any(a.lower() == profile for a in p.info["cmdline"] or []):
+                found.append(p)
+        except (psutil.Error, TypeError):
+            pass
+    return found
+
+
+def close_window():
+    for p in window_processes():
+        try:
+            p.terminate()
+        except Exception:
+            pass
+
+
 def run_window(server):
     """Waits until either the window is closed (then quits Lester) or Lester quits
     from the map's power button (then closes the window)."""
     window = open_window()
-    opened = time.time()
+    if window is None:   # no Edge: the map is in the normal browser; the power button quits
+        server.wait()
+        return
+    seen, gone_since = False, None
     while True:
         time.sleep(0.5)
         if server.poll() is not None:
-            if window and window.poll() is None:
-                window.terminate()
+            close_window()
             return
-        if window and window.poll() is not None:
-            if time.time() - opened < 5:
-                # Edge handed the window to an Edge that was already open with Lester's profile.
-                # Keep running; the map's power button quits.
-                window = None
-                continue
+        if window_processes():
+            seen, gone_since = True, None
+            continue
+        if not seen and window.poll() is None:
+            continue   # still starting
+        gone_since = gone_since or time.time()
+        if time.time() - gone_since >= 2:   # closed (not just handed over between processes)
             quit_server()
             try:
                 server.wait(timeout=10)
