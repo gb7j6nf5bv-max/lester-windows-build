@@ -10,8 +10,10 @@ $Install = Join-Path $env:LOCALAPPDATA 'Programs\Lester'
 $State   = Join-Path $env:LOCALAPPDATA 'Lester'
 New-Item -ItemType Directory -Force -Path $Results, (Join-Path $Pkg 'app') | Out-Null
 $script:failed = @()
+$Summary = Join-Path $Results 'summary.txt'
+function Note($line) { Write-Host $line; Add-Content -Path $Summary -Value $line -Encoding UTF8 }
 function Check($name, $ok, $detail = '') {
-  if ($ok) { Write-Host "PASS $name" } else { Write-Host "FAIL $name $detail"; $script:failed += $name }
+  if ($ok) { Note "PASS $name" } else { Note "FAIL $name $detail"; $script:failed += $name }
 }
 function Wait-Until([scriptblock]$cond, [int]$seconds) {
   $end = (Get-Date).AddSeconds($seconds)
@@ -52,7 +54,7 @@ $t0 = Get-Date
 Start-Process -FilePath (Join-Path $Pkg 'Lester.exe')
 $serverUp = Wait-Until { Up 'http://127.0.0.1:8765/api/ping' } 600
 Check 'first open: map server starts (installs everything first)' $serverUp
-Write-Host ("first open took {0:n0} s" -f ((Get-Date) - $t0).TotalSeconds)
+Note ("first open took {0:n0} s" -f ((Get-Date) - $t0).TotalSeconds)
 Check 'installed into the user Programs folder' (Test-Path (Join-Path $Install 'Lester.exe'))
 Check 'Start menu shortcut' (Test-Path (Join-Path ([Environment]::GetFolderPath('Programs')) 'Lester.lnk'))
 Check 'Desktop shortcut' (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Lester.lnk'))
@@ -61,6 +63,10 @@ Check 'iPhone tools installed' (Test-Path (Join-Path $State 'tools\pymobiledevic
 Check 'iOS 17+ tunnel running (admin prompt accepted)' (Wait-Until { Up 'http://127.0.0.1:49151/' } 90)
 Check 'Lester window open (Edge app mode)' (Wait-Until { @(Lester-Processes | Where-Object { $_.Name -eq 'msedge.exe' }).Count -gt 0 } 30)
 $procs = Lester-Processes
+Note ("Lester processes: " + (($procs | ForEach-Object { "$($_.Name): " + $_.CommandLine.Substring(0, [Math]::Min(160, $_.CommandLine.Length)) }) -join ' | '))
+# Map pictures come from OpenStreetMap, which blocks many data-centre computers like this one
+try { $code = (Invoke-WebRequest -UseBasicParsing 'https://tile.openstreetmap.org/3/4/2.png' -TimeoutSec 10).StatusCode } catch { $code = $_.Exception.Response.StatusCode.value__ }
+Note "info: OpenStreetMap answers this build machine with HTTP $code (403 = this machine is blocked, not Lester)"
 Check 'server runs from the installed copy' (@($procs | Where-Object { $_.CommandLine -match [regex]::Escape($Install) -and $_.CommandLine -match 'lester\.py' }).Count -gt 0)
 Start-Sleep -Seconds 6
 Shot 'lester-window'
@@ -88,7 +94,7 @@ Check 'quit: window and helpers close' (Wait-Until { @(Lester-Processes).Count -
 $t1 = Get-Date
 Start-Process -FilePath (Join-Path $Install 'Lester.exe')
 Check 'second open: starts again' (Wait-Until { Up 'http://127.0.0.1:8765/api/ping' } 120)
-Write-Host ("second open took {0:n0} s" -f ((Get-Date) - $t1).TotalSeconds)
+Note ("second open took {0:n0} s" -f ((Get-Date) - $t1).TotalSeconds)
 Check 'second open: tunnel again' (Wait-Until { Up 'http://127.0.0.1:49151/' } 90)
 # Opening it while it's already open just shows the window
 Start-Process -FilePath (Join-Path $Install 'Lester.exe'); Start-Sleep -Seconds 15
@@ -107,6 +113,6 @@ foreach ($log in 'lester.log', 'tunneld.log') {
 Write-Host '--- lester.log (end) ---'
 if (Test-Path (Join-Path $State 'lester.log')) { Get-Content (Join-Path $State 'lester.log') -Tail 60 }
 Write-Host ''
-if ($script:failed.Count) { Write-Host "$($script:failed.Count) failed: $($script:failed -join ', ')"; exit 1 }
-Write-Host 'All end-to-end checks passed'
+if ($script:failed.Count) { Note "$($script:failed.Count) failed: $($script:failed -join ', ')"; exit 1 }
+Note 'All end-to-end checks passed'
 exit 0
