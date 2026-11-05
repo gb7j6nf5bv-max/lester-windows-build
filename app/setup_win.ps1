@@ -101,7 +101,7 @@ if (-not $toolsOk) {
   $env:UV_PYTHON_INSTALL_DIR = Join-Path $State 'python'
   $env:UV_NO_MODIFY_PATH = '1'
   $ErrorActionPreference = 'Continue'   # uv prints its progress on stderr
-  & $Uv tool install --python 3.13 --force pymobiledevice3 *>> $Log
+  & $Uv tool install --python 3.13 --force pymobiledevice3 2>&1 | ForEach-Object { "$_" } | Add-Content -Path $Log -Encoding UTF8
   $uvCode = $LASTEXITCODE
   $ErrorActionPreference = 'Stop'
   if ($uvCode -ne 0 -or -not (Test-Path $Pmd3)) {
