@@ -1,0 +1,1381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lester">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="/icon.png">
+<title>Lester</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230a0a0a'/%3E%3Cpath d='M10 6.5h5.4v13.6h7.6v5.4H10z' fill='%23ff2a3c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"
+        integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k" crossorigin="anonymous"></script>
+<style>
+  /* Lester: black, red and white */
+  :root {
+    --bg: #000;
+    --glass: rgba(10,10,10,.86);
+    --card: #121212;
+    --card-2: #1a1a1a;
+    --text: #ffffff;
+    --muted: #a3a3a3;
+    --faint: #6b6b6b;
+    --line: rgba(255,255,255,.09);
+    --field: rgba(255,255,255,.06);
+    --red: #ff2a3c;
+    --red-deep: #b0001a;
+    --red-soft: rgba(255,42,60,.14);
+    --red-glow: rgba(255,42,60,.45);
+    --ok: #ffffff;
+    --warn: #ffb020;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 18px 50px rgba(0,0,0,.6);
+    --radius: 20px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  button { font: inherit; }
+  #map { position: fixed; inset: 0; background: #0b0b0b; }
+  /* Monochrome dark map so the red route and pins stand out */
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) grayscale(1) brightness(.85) contrast(.95); }
+  .leaflet-control-attribution { font-size: 10px; background: rgba(0,0,0,.6) !important; color: var(--faint); }
+  .leaflet-control-attribution a { color: var(--muted); }
+  .leaflet-control-zoom { border: none !important; box-shadow: var(--shadow) !important; border-radius: 12px !important; overflow: hidden; }
+  .leaflet-control-zoom a { background: var(--glass) !important; color: var(--text) !important; border-color: var(--line) !important;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .leaflet-control-zoom a:hover { color: var(--red) !important; }
+
+  /* Panel */
+  .panel { position: fixed; top: 16px; left: 16px; bottom: 16px; width: 380px; z-index: 500;
+    background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+    display: flex; flex-direction: column; overflow: hidden; }
+  .panel::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--red), transparent); opacity: .8; }
+  .scroll { overflow-y: auto; padding: 0 18px 18px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 20px 18px 14px; }
+  .logo { width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center;
+    background: #0a0a0a; border: 1px solid rgba(255,42,60,.35); box-shadow: 0 0 22px rgba(255,42,60,.25); }
+  .brand { font-size: 23px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+  .brand span { color: var(--red); }
+  .tag { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+
+  .device { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--field); border: 1px solid var(--line); }
+  .phone-ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); flex: none; }
+  .device .meta { min-width: 0; flex: 1; }
+  .device strong { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .device small { color: var(--muted); font-size: 12px; }
+  .pill { font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 99px; display: inline-flex; align-items: center; gap: 6px;
+    background: var(--card-2); color: var(--muted); white-space: nowrap; letter-spacing: .01em; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .pill.on { color: #fff; background: var(--red); } .pill.on i { background: #fff; }
+  .pill.move { color: #fff; background: var(--red); } .pill.move i { background: #fff; animation: blink 1s infinite; }
+  .pill.busy { color: var(--warn); } .pill.busy i { background: var(--warn); animation: blink 1s infinite; }
+  .pill.real { color: #fff; } .pill.real i { background: #fff; }
+  .pill.off { color: var(--red); } .pill.off i { background: var(--red); }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  .search { position: relative; }
+  .search svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+  .search input { width: 100%; height: 46px; padding: 0 14px 0 40px; border-radius: 14px; border: 1px solid var(--line);
+    background: var(--field); color: var(--text); font: inherit; font-size: 15px; transition: border-color .15s, background .15s, box-shadow .15s; }
+  .search input::placeholder { color: var(--faint); }
+  .search input:focus { outline: none; border-color: var(--red); background: var(--card); box-shadow: 0 0 0 3px var(--red-soft); }
+  .results { list-style: none; margin: 6px 0 0; padding: 6px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); display: none; }
+  .results.show { display: block; }
+  .results li { padding: 9px 10px; border-radius: 10px; cursor: pointer; }
+  .results li:hover, .results li.active { background: var(--red-soft); }
+  .results li b { display: block; font-weight: 600; }
+  .results li span { color: var(--muted); font-size: 12px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .results li.note { color: var(--muted); cursor: default; } .results li.note:hover { background: none; }
+
+  .label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 0 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 6px 11px; border-radius: 99px;
+    font-size: 13px; cursor: pointer; transition: transform .1s, border-color .15s, color .15s; }
+  .chip:hover { border-color: var(--red); } .chip:active { transform: scale(.96); }
+
+  /* Segmented controls */
+  .seg { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: var(--field); border: 1px solid var(--line); }
+  .seg button { flex: 1; border: none; background: none; padding: 8px 6px; border-radius: 9px; font-size: 13px; font-weight: 600;
+    color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s, color .15s; }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { background: #fff; color: #000; }
+  .seg.red button.on { background: var(--red); color: #fff; }
+
+  .target { border-radius: 16px; background: var(--card); padding: 14px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+  .dest .name { font-size: 17px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; }
+  .dest .coords { margin-top: 3px; font: 12.5px ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dest .empty { color: var(--muted); }
+  .iconbtn { border: none; background: none; color: var(--faint); cursor: pointer; padding: 2px; border-radius: 6px; display: inline-grid; place-items: center; }
+  .iconbtn:hover { color: var(--red); background: var(--red-soft); }
+  .actions { display: flex; gap: 8px; }
+
+  button.primary { flex: 1; height: 46px; border: none; border-radius: 13px; cursor: pointer; color: #fff; font-size: 15px; font-weight: 700;
+    background: linear-gradient(180deg, #ff3b4c, var(--red) 45%, #d8001d); box-shadow: 0 8px 24px rgba(255,42,60,.35), inset 0 1px 0 rgba(255,255,255,.25);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: transform .1s, opacity .15s, box-shadow .15s; }
+  button.primary:hover { box-shadow: 0 10px 30px var(--red-glow), inset 0 1px 0 rgba(255,255,255,.25); }
+  button.primary:active { transform: scale(.98); }
+  button.primary:disabled { opacity: .35; cursor: default; box-shadow: none; }
+  button.primary.white { background: #fff; color: #000; box-shadow: 0 8px 24px rgba(255,255,255,.12); }
+  button.ghost { height: 46px; width: 46px; border-radius: 13px; border: 1px solid var(--line); background: var(--field); color: var(--text);
+    cursor: pointer; display: grid; place-items: center; transition: color .15s, border-color .15s; flex: none; }
+  button.ghost:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+  button.ghost.saved { color: var(--red); border-color: rgba(255,42,60,.4); }
+  button.ghost.saved svg path { fill: currentColor; }
+  button.ghost:disabled { opacity: .35; cursor: default; }
+  .reset { width: 100%; height: 38px; border-radius: 12px; border: none; background: none; color: var(--muted);
+    font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+  .reset:hover { color: var(--red); background: var(--red-soft); }
+  .spin { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Travel */
+  .travel { display: none; flex-direction: column; gap: 10px; }
+  .target.travel-mode .travel { display: flex; }
+  .target.travel-mode .tp-only { display: none; }
+  .speed { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; }
+  .speed input[type=range] { flex: 1; accent-color: var(--red); }
+  .speed b { color: var(--text); font-variant-numeric: tabular-nums; min-width: 62px; text-align: right; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12.5px; }
+  .switch { position: relative; width: 36px; height: 21px; border-radius: 99px; background: var(--card-2); border: 1px solid var(--line); cursor: pointer; transition: background .15s; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch.on { background: var(--red); border-color: var(--red); } .switch.on::after { transform: translateX(15px); }
+  .routeinfo { display: flex; gap: 8px; }
+  .stat { flex: 1; background: var(--field); border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; }
+  .stat small { display: block; color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .stat b { font-size: 15px; font-variant-numeric: tabular-nums; }
+  .progress { height: 6px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--red-deep), var(--red)); box-shadow: 0 0 12px var(--red-glow); transition: width .3s linear; }
+  .tripline { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tripline b { color: var(--text); }
+  .hint { color: var(--faint); font-size: 12px; }
+
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 11px; cursor: pointer; }
+  .list li:hover { background: var(--field); }
+  .list .dot { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--red-soft); color: var(--red); flex: none; font-size: 13px; }
+  .list .txt { flex: 1; min-width: 0; }
+  .list .txt b { display: block; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list .txt span { color: var(--faint); font: 11.5px ui-monospace, "SF Mono", Menlo, monospace; }
+  .list .x { opacity: 0; } .list li:hover .x { opacity: 1; }
+  .list .none { color: var(--faint); cursor: default; justify-content: center; padding: 14px; } .list .none:hover { background: none; }
+  .foot { color: var(--faint); font-size: 11.5px; text-align: center; padding-top: 4px; }
+
+  /* Map markers */
+  .pin { filter: drop-shadow(0 6px 12px rgba(255,42,60,.45)); transform-origin: bottom center; animation: drop .35s cubic-bezier(.3,1.6,.6,1); }
+  @keyframes drop { from { transform: translateY(-14px) scale(.8); opacity: 0; } }
+  .me { position: relative; width: 20px; height: 20px; }
+  .me::before { content: ""; position: absolute; inset: -16px; border-radius: 50%; background: rgba(255,42,60,.35); animation: pulse 2s ease-out infinite; }
+  .me::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #fff; border: 4px solid var(--red); box-shadow: 0 0 0 2px #000, 0 2px 10px rgba(0,0,0,.6); }
+  @keyframes pulse { from { transform: scale(.45); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+  .startdot { width: 14px; height: 14px; border-radius: 50%; background: #000; border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.6); }
+  .leaflet-tooltip.me-tip { background: #fff; color: #000; border: none; border-radius: 8px; box-shadow: var(--shadow); font-weight: 700; padding: 4px 9px; }
+  .leaflet-tooltip.me-tip::before { display: none; }
+  .route-glow { filter: drop-shadow(0 0 6px rgba(255,42,60,.8)); }
+
+  /* Toast */
+  .toast { position: fixed; top: 20px; left: 50%; transform: translate(-50%, -20px); opacity: 0; pointer-events: none; z-index: 1000;
+    display: flex; align-items: center; gap: 10px; max-width: min(520px, calc(100vw - 32px)); padding: 11px 16px; border-radius: 14px;
+    background: #fff; color: #000; box-shadow: var(--shadow); font-weight: 600;
+    transition: opacity .2s, transform .25s cubic-bezier(.3,1.4,.6,1); }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast .ti { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: none; color: #fff; background: #000; font-size: 13px; }
+  .toast.err { background: var(--red); color: #fff; } .toast.err .ti { background: #fff; color: var(--red); }
+
+  .iconbtn.quit { padding: 8px; border-radius: 10px; align-self: flex-start; }
+  .iconbtn.quit.armed { color: #fff; background: var(--red); }
+  .bye { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; text-align: center; background: #000; color: var(--muted); font-size: 15px; }
+  .bye b { display: block; color: var(--text); font-size: 22px; margin: 14px 0 6px; letter-spacing: -.02em; }
+
+  /* Joystick: always on the map, top right under the zoom buttons */
+  .joy { position: fixed; top: 96px; right: 18px; z-index: 600; display: flex; flex-direction: column; align-items: center; gap: 18px; user-select: none; -webkit-user-select: none; }
+  .joyhow { border: 1px solid var(--line); background: rgba(0,0,0,.8); color: #fff; border-radius: 99px; padding: 6px 11px;
+    font-size: 12px; font-weight: 700; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .joyhow:hover { border-color: var(--red); }
+  .pad { position: relative; width: 124px; height: 124px; border-radius: 50%; background: rgba(0,0,0,.55); border: 1px solid var(--line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); touch-action: none; cursor: grab; }
+  .pad.off { opacity: .55; }
+  .pad .n { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 800; color: var(--red); }
+  .pad .chev { position: absolute; color: var(--faint); font-size: 10px; }
+  .knob { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%;
+    background: linear-gradient(180deg, #ff4d5c, var(--red)); box-shadow: 0 0 18px var(--red-glow); transition: transform .18s cubic-bezier(.3,1.6,.6,1); }
+  .pad.drag .knob { transition: none; cursor: grabbing; }
+  .joyhint { position: fixed; top: 270px; right: 12px; z-index: 600; width: 136px; text-align: center; font-size: 11px; color: var(--muted);
+    background: rgba(0,0,0,.6); border-radius: 8px; padding: 4px 6px; }
+  @media (max-width: 720px) { .joy { top: 80px; right: 12px; } .joyhint { display: none; } }
+
+  /* Itinerary */
+  .steps-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .steps-list li { display: flex; align-items: center; gap: 10px; background: var(--field); border: 1px solid var(--line); border-radius: 11px; padding: 9px 10px; }
+  .steps-list li .t { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 66px; }
+  .steps-list li .w { flex: 1; color: var(--muted); font-size: 13px; }
+  .steps-list li .done { font-size: 10.5px; font-weight: 700; color: var(--faint); }
+  .addstep { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .addstep input, .addstep select { height: 42px; border-radius: 11px; border: 1px solid var(--line); background: var(--field); color: var(--text); font: inherit; padding: 0 10px; color-scheme: dark; }
+  .addstep .full { grid-column: 1 / -1; }
+
+  /* Mac-only controls are hidden when a phone is viewing */
+  body.phone .mac-only { display: none !important; }
+
+  /* Use on iPhone sheet */
+  .sheet-bg { position: fixed; inset: 0; z-index: 1500; background: rgba(0,0,0,.65); display: grid; place-items: center; padding: 16px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .sheet { width: min(430px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: var(--card); border: 1px solid var(--line);
+    border-radius: 20px; box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; }
+  .sheet-head b { font-size: 17px; letter-spacing: -.01em; }
+  .qr { background: #fff; border-radius: 16px; padding: 14px; width: 232px; height: 232px; margin: 0 auto; box-shadow: 0 0 30px rgba(255,42,60,.25); }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .steps { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+  .steps b { color: var(--text); }
+  .urlrow { display: flex; align-items: center; gap: 8px; background: var(--field); border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; }
+  .urlrow code { flex: 1; font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .warnnote { font-size: 12px; color: var(--faint); }
+  .reset.armed { color: #fff; background: var(--red); }
+  .sec { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .sec .hint b { color: var(--text); }
+  .pairrow { display: flex; gap: 8px; }
+  /* iPhone setup guide: one card per step, click a step to open it */
+  .gprog { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .gprog .bar { flex: 1; height: 6px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
+  .gprog .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--red-deep), var(--red));
+    box-shadow: 0 0 10px var(--red-glow); transition: width .6s cubic-bezier(.3,.8,.3,1); }
+  .guide { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .gstep { border-radius: 14px; background: var(--field); border: 1px solid var(--line); transition: border-color .3s, background .3s; }
+  .gstep.now { border-color: rgba(255,42,60,.5); background: rgba(255,42,60,.06); }
+  .gstep.open { background: var(--card-2); }
+  .gstep.now.open { background: rgba(255,42,60,.08); }
+  .ghead { width: 100%; display: flex; align-items: center; gap: 11px; padding: 12px; background: none; border: none; color: var(--text);
+    font: inherit; cursor: pointer; text-align: left; border-radius: 14px; }
+  .ghead:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
+  .ghead .num { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800;
+    background: var(--card); color: var(--muted); border: 1px solid var(--line); transition: background .3s, color .3s; }
+  .gstep.now .num { background: var(--red); color: #fff; border-color: var(--red); }
+  .gstep.done .num { background: #fff; color: #000; border-color: #fff; }
+  .gstep.justdone .num { animation: pop .5s cubic-bezier(.3,1.7,.6,1); }
+  @keyframes pop { 0% { transform: scale(.4); } 100% { transform: scale(1); } }
+  .ghead .ttl { flex: 1; min-width: 0; font-weight: 650; font-size: 14px; }
+  .gstep.done .ttl { color: var(--muted); }
+  .ghead .chip { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px;
+    background: var(--card); color: var(--faint); white-space: nowrap; }
+  .gstep.now .chip { background: var(--red); color: #fff; }
+  .gstep.done .chip { color: var(--text); }
+  .ghead .chev { color: var(--faint); transition: transform .35s cubic-bezier(.3,.8,.3,1); flex: none; }
+  .gstep.open .chev { transform: rotate(180deg); }
+  .gbody { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .4s cubic-bezier(.3,.8,.3,1); }
+  .gstep.open .gbody { grid-template-rows: 1fr; }
+  .gbody > div { overflow: hidden; min-height: 0; }
+  .gbody .gin { padding: 0 14px 14px 49px; display: flex; flex-direction: column; gap: 10px; color: var(--muted); font-size: 13px; line-height: 1.55;
+    opacity: 0; transform: translateY(-4px); transition: opacity .3s .05s, transform .35s; }
+  .gstep.open .gin { opacity: 1; transform: none; }
+  .gbody b { color: var(--text); }
+  .gbody ol.mini { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .gbody .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .gbody .act { height: 36px; padding: 0 16px; border-radius: 11px; border: none; cursor: pointer; font: inherit; font-weight: 700; font-size: 13px;
+    background: linear-gradient(180deg, #ff3b4c, var(--red)); color: #fff; display: inline-flex; align-items: center; gap: 7px;
+    box-shadow: 0 6px 16px rgba(255,42,60,.28); transition: transform .12s, box-shadow .2s, opacity .2s; }
+  .gbody .act:hover:not(:disabled) { box-shadow: 0 8px 22px rgba(255,42,60,.42); }
+  .gbody .act:active:not(:disabled) { transform: scale(.97); }
+  .gbody .act.white { background: #fff; color: #000; box-shadow: none; }
+  .gbody .act.small { height: 28px; padding: 0 12px; font-size: 12px; }
+  .gbody .act:disabled { opacity: .4; cursor: default; box-shadow: none; }
+  .gbody .cmd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .gbody code { font: 11.5px ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); background: var(--card);
+    border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; word-break: break-all; }
+  .gbody .qrmini { width: 104px; height: 104px; background: #fff; border-radius: 12px; padding: 7px; }
+  .gbody .qrmini svg { width: 100%; height: 100%; display: block; }
+  .gbody .ok { color: var(--text); font-weight: 600; }
+  .gbody .bad { color: var(--red); }
+  .gbody .signin { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+  .gfield { height: 40px; border-radius: 11px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 14px; padding: 0 12px; min-width: 0; }
+  .gfield:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+  #tfaCode { width: 140px; letter-spacing: .2em; font-variant-numeric: tabular-nums; }
+  .gbody .remember { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 8px; cursor: pointer; }
+  .gbody .remember input { accent-color: var(--red); }
+  .gbody .alt { font-size: 12px; color: var(--faint); }
+  .linkbtn { border: none; background: none; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; padding: 0; }
+  .linkbtn:hover { color: var(--text); }
+  .gbody .certs { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+  .gbody .certs label { display: flex; gap: 8px; align-items: center; cursor: pointer; color: var(--text); }
+  .gbody .certs label span { color: var(--faint); }
+  .gbody .gprog { margin: 8px 0; }
+  .pairrow select { flex: 1; min-width: 0; height: 46px; border-radius: 13px; border: 1px solid var(--line); background: var(--field);
+    color: var(--text); font: inherit; padding: 0 12px; }
+  #pairMsg.ok { color: var(--text); } #pairMsg.err { color: var(--red); }
+
+  /* Mobile: bottom sheet */
+  @media (max-width: 720px) {
+    .panel { top: auto; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: auto; max-height: 64vh; border-radius: 22px; }
+    .leaflet-top { margin-top: env(safe-area-inset-top); }
+    header { padding: 16px 16px 10px; }
+    .scroll { padding: 0 16px 16px; }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<aside class="panel">
+  <header>
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24"><path d="M6.5 3h4.6v12.4h6.4V20H6.5z" fill="#ff2a3c"/></svg>
+    </div>
+    <div style="flex:1">
+      <div class="brand">Lester<span>.</span></div>
+      <div class="tag">Put your iPhone anywhere in the world</div>
+    </div>
+    <button class="iconbtn quit" id="itinBtn" title="Itinerary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M12 13v3l2 1.2"/></svg>
+    </button>
+    <button class="iconbtn quit mac-only" id="phoneBtn" title="Lester on your iPhone">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>
+    </button>
+    <button class="iconbtn quit mac-only" id="quitBtn" title="Quit Lester">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+    </button>
+  </header>
+
+  <div class="scroll">
+    <div class="device">
+      <div class="phone-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div>
+      <div class="meta"><strong id="devName">Looking for iPhone…</strong><small id="devInfo">Plug it in and unlock it</small></div>
+      <span class="pill" id="pill"><i></i><span id="pillText">Offline</span></span>
+    </div>
+
+    <div class="search">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" placeholder="Search a place or paste coordinates" autocomplete="off" spellcheck="false">
+      <ul class="results" id="results"></ul>
+    </div>
+
+    <div>
+      <p class="label">Quick picks</p>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="target" id="target">
+      <div class="seg" id="modeSeg">
+        <button data-mode="teleport" class="on">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Teleport</button>
+        <button data-mode="travel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg>Travel</button>
+      </div>
+
+      <div class="dest" id="dest"><div class="empty">Search, pick a city, or tap anywhere on the map.</div></div>
+
+      <!-- Travel options -->
+      <div class="travel" id="travelOpts">
+        <div class="seg red" id="howSeg">
+          <button data-how="foot">🚶 Walk</button>
+          <button data-how="bike">🚲 Bike</button>
+          <button data-how="car">🚗 Drive</button>
+        </div>
+        <div class="speed"><span>Speed</span><input type="range" id="speed" min="1" max="200" step="1"><b id="speedVal"></b></div>
+        <div class="toggle"><span>Follow roads</span><div class="switch on" id="roadsSw" role="switch" aria-checked="true" tabindex="0"></div></div>
+        <div class="routeinfo" id="routeInfo" hidden>
+          <div class="stat"><small>Distance</small><b id="riDist">–</b></div>
+          <div class="stat"><small>Time</small><b id="riTime">–</b></div>
+        </div>
+        <div class="hint" id="travelHint">Your iPhone starts from where it is now.</div>
+        <div id="tripBox" hidden>
+          <div class="progress"><i id="progBar"></i></div>
+          <div class="tripline" style="margin-top:8px"><span id="tripLeft"></span><span id="tripDone"></span></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="goBtn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+          <span>Teleport here</span>
+        </button>
+        <button class="ghost" id="saveBtn" title="Save place" disabled>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/></svg>
+        </button>
+      </div>
+      <button class="reset" id="resetBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        Back to my real location
+      </button>
+    </div>
+
+    <div>
+      <div class="seg" id="listSeg" style="margin-bottom:8px"><button data-tab="recent" class="on">Recent</button><button data-tab="saved">Saved</button></div>
+      <ul class="list" id="list"></ul>
+    </div>
+
+    <div class="foot">Lester · keep this Mac awake while you use it</div>
+  </div>
+</aside>
+
+<div class="joy" id="joy">
+  <button class="joyhow" id="joyHow" title="Joystick speed: click to change"></button>
+  <div class="pad" id="pad" title="Drag to move, or use the arrow keys / WASD">
+    <span class="n">N</span>
+    <span class="chev" style="top:6px;left:50%;transform:translateX(-50%)">▲</span>
+    <span class="chev" style="bottom:6px;left:50%;transform:translateX(-50%)">▼</span>
+    <span class="chev" style="left:7px;top:50%;transform:translateY(-50%)">◀</span>
+    <span class="chev" style="right:7px;top:50%;transform:translateY(-50%)">▶</span>
+    <div class="knob" id="knob"></div>
+  </div>
+</div>
+<div class="joyhint mac-only" id="joyHint">Drag, or use arrow keys / WASD</div>
+
+<div class="sheet-bg" id="itinSheet" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="itinTitle">
+    <div class="sheet-head"><b id="itinTitle">Itinerary</b><button class="iconbtn" id="itinClose" title="Close">✕</button></div>
+    <div class="toggle"><span>Run this itinerary</span><div class="switch" id="itinOn" role="switch" aria-checked="false" tabindex="0"></div></div>
+    <div class="toggle"><span>Repeat every day</span><div class="switch" id="itinRepeat" role="switch" aria-checked="true" tabindex="0"></div></div>
+    <p class="hint" id="itinNext"></p>
+    <ul class="steps-list" id="itinSteps"></ul>
+    <p class="label" style="margin:6px 0 0">Add a step</p>
+    <div class="addstep">
+      <input type="time" id="stepTime" aria-label="Time">
+      <select id="stepAction" aria-label="What to do">
+        <option value="walk">🚶 Walk</option><option value="bike">🚲 Bike</option><option value="drive">🚗 Drive</option><option value="teleport">⚡ Teleport</option>
+      </select>
+      <select id="stepDest" class="full" aria-label="Destination"></select>
+      <button class="primary full" id="stepAdd"><span>Add step</span></button>
+    </div>
+    <p class="hint">Lester on this Mac runs each step on time (up to 15 minutes late if the Mac was asleep). Keep Lester open. Walk, bike and drive follow roads from wherever the iPhone is at that time.</p>
+  </div>
+</div>
+
+<div class="sheet-bg" id="phoneSheet" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="phoneTitle">
+    <div class="sheet-head"><b id="phoneTitle">Lester on your iPhone</b><button class="iconbtn" id="phoneClose" title="Close">✕</button></div>
+
+    <div class="sec">
+      <p class="label">Set up Lester for iPhone</p>
+      <p class="hint">Lets your iPhone change its own location, without this Mac. Plug the iPhone in, unlock it, and follow the steps. Lester checks each one for you.</p>
+      <div class="pairrow">
+        <select id="pairPhone" aria-label="iPhone to set up"></select>
+        <button class="ghost" id="setupRefresh" title="Check again">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+        </button>
+      </div>
+      <div class="gprog"><div class="bar"><i id="gprogBar"></i></div><span id="gprogText"></span></div>
+      <ol class="guide" id="guide"></ol>
+      <p class="hint" id="pairMsg" hidden></p>
+    </div>
+
+    <p class="label" style="margin:4px 0 0">Control this Mac from Safari</p>
+    <div class="toggle"><span>Let phones on this Wi-Fi control Lester</span><div class="switch" id="remoteSw" role="switch" aria-checked="false" tabindex="0"></div></div>
+    <div id="remoteOn" hidden style="display:flex;flex-direction:column;gap:14px">
+      <div class="qr" id="qr"></div>
+      <ol class="steps">
+        <li>Make sure your iPhone is on the <b>same Wi-Fi</b> as this Mac.</li>
+        <li>Open the iPhone's <b>Camera</b>, point it at the code, and tap the link.</li>
+        <li>In Safari, tap <b>Share</b>, then <b>Add to Home Screen</b> for a Lester app icon.</li>
+      </ol>
+      <div class="urlrow"><code id="remoteUrl"></code>
+        <button class="iconbtn" id="copyUrl" title="Copy link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+      <div class="warnnote">Only share this code with people you trust: anyone who has it can control Lester while they're on your Wi-Fi.</div>
+      <button class="reset" id="resetKey">Make a new code (phones you've added stop working)</button>
+    </div>
+    <p class="hint" id="remoteOff">Off. Phones can't reach Lester.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="ti" id="toastIco">✓</span><span id="toastMsg"></span></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (lat, lon) => `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+const fmtDist = m => m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
+function fmtTime(s) {
+  s = Math.max(0, Math.round(s));
+  if (s < 60) return `${s}s`;
+  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m} min`;
+}
+function dist(a, b) { // meters, [lat, lon]
+  const R = 6371008.8, r = Math.PI / 180;
+  const h = Math.sin((b[0] - a[0]) * r / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a[1]) * r / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/* ---------- Map ---------- */
+const map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([30, 10], 3);
+L.control.zoom({ position: 'topright' }).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+
+const pinIcon = L.divIcon({ className: '', iconSize: [34, 44], iconAnchor: [17, 42],
+  html: `<svg class="pin" width="34" height="44" viewBox="0 0 34 44"><path d="M17 1C8.2 1 1 8 1 16.7 1 28.5 17 43 17 43s16-14.5 16-26.3C33 8 25.8 1 17 1z" fill="#ff2a3c" stroke="#fff" stroke-width="2"/><circle cx="17" cy="16.5" r="5.5" fill="#fff"/></svg>` });
+const meIcon = L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: '<div class="me"></div>' });
+const startIcon = L.divIcon({ className: '', iconSize: [14, 14], iconAnchor: [7, 7], html: '<div class="startdot"></div>' });
+
+let selected = null, selMarker = null, phoneMarker = null, deviceName = 'iPhone', phonePos = null;
+
+/* ---------- Toast ---------- */
+function toast(msg, kind = 'ok') {
+  const t = $('toast');
+  $('toastMsg').textContent = msg; $('toastIco').textContent = kind === 'err' ? '!' : '✓';
+  t.className = 'toast show ' + kind;
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast ' + kind, kind === 'err' ? 7000 : 3200);
+}
+
+/* ---------- API ---------- */
+// Phones open Lester with a secret access key in the link (from the QR code on the Mac)
+const KEY = new URLSearchParams(location.search).get('k');
+const IS_PHONE = !!KEY;
+if (IS_PHONE) document.body.classList.add('phone');
+async function api(path, body) {
+  const headers = KEY ? { 'X-Lester-Key': KEY } : {};
+  const r = await fetch(path, body
+    ? { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : { headers });
+  const j = await r.json().catch(() => ({ error: 'Lester didn’t respond' }));
+  if (r.status === 401) { const e = new Error(j.error || 'This phone needs a new code'); e.locked = true; throw e; }
+  if (body && (!r.ok || j.error)) throw new Error(j.error || 'Something went wrong');
+  return j;
+}
+
+/* ---------- Mode: teleport / travel ---------- */
+let mode = store.get('mode', 'teleport');
+let how = store.get('how', 'foot');
+const DEFAULT_KMH = { foot: 5, bike: 16, car: 50 };
+let speedKmh = store.get('speed_' + how, DEFAULT_KMH[how]);
+let followRoads = store.get('roads', true);
+
+function setMode(m) {
+  mode = m; store.set('mode', m);
+  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  $('target').classList.toggle('travel-mode', m === 'travel');
+  updateGoButton();
+  if (m === 'travel') previewRoute(); else clearPreview();
+}
+function setHow(h) {
+  how = h; store.set('how', h);
+  document.querySelectorAll('#howSeg button').forEach(b => b.classList.toggle('on', b.dataset.how === h));
+  setSpeed(store.get('speed_' + h, DEFAULT_KMH[h]), false);
+  previewRoute();
+}
+function setSpeed(v, save = true) {
+  speedKmh = Math.max(1, Math.min(200, Math.round(v)));
+  $('speed').value = speedKmh; $('speedVal').textContent = `${speedKmh} km/h`;
+  if (save) store.set('speed_' + how, speedKmh);
+  updateRouteInfo();
+}
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+document.querySelectorAll('#howSeg button').forEach(b => b.onclick = () => setHow(b.dataset.how));
+$('speed').oninput = e => setSpeed(+e.target.value);
+function setRoads(on) {
+  followRoads = on; store.set('roads', on);
+  $('roadsSw').classList.toggle('on', on); $('roadsSw').setAttribute('aria-checked', on);
+  previewRoute();
+}
+$('roadsSw').onclick = () => setRoads(!followRoads);
+$('roadsSw').onkeydown = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setRoads(!followRoads); } };
+
+/* ---------- Selection ---------- */
+function isSaved(p) { return p && store.get('saved', []).some(s => s.lat === p.lat && s.lon === p.lon); }
+
+function select(lat, lon, name, sub, fly = true) {
+  selected = { lat, lon, name: name || 'Dropped pin', sub: sub || '' };
+  if (!selMarker) selMarker = L.marker([lat, lon], { icon: pinIcon }).addTo(map);
+  else { selMarker.setLatLng([lat, lon]); selMarker.setIcon(pinIcon); }
+  $('dest').innerHTML = `<div class="name">${esc(selected.name)}</div>
+    <div class="coords"><span>${fmt(lat, lon)}</span>
+    <button class="iconbtn" id="copyBtn" title="Copy coordinates"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>`;
+  $('copyBtn').onclick = () => navigator.clipboard?.writeText(fmt(lat, lon)).then(() => toast('Coordinates copied'));
+  $('saveBtn').disabled = false;
+  $('saveBtn').classList.toggle('saved', isSaved(selected));
+  updateGoButton();
+  if (mode === 'travel') previewRoute(true);
+  else if (fly) map.flyTo([lat, lon], Math.max(map.getZoom(), 14), { duration: 1.2 });
+}
+
+map.on('click', async e => {
+  const { lat, lng } = e.latlng;
+  select(lat, lng, 'Dropped pin', '', false);
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=14&lat=${lat}&lon=${lng}`);
+    const j = await r.json();
+    if (j && j.address && selected && selected.lat === lat) {
+      const a = j.address;
+      const name = a.neighbourhood || a.suburb || a.village || a.town || a.city || a.county || a.state || a.country;
+      if (name) { selected.name = name; $('dest').querySelector('.name').textContent = name; }
+    }
+  } catch {}
+});
+
+/* ---------- Route preview ---------- */
+let preview = null;       // { points, distance, key }
+let previewLine = null, startMarker = null, previewSeq = 0;
+
+function clearPreview() {
+  if (previewLine) { map.removeLayer(previewLine); previewLine = null; }
+  if (startMarker && !trip) { map.removeLayer(startMarker); startMarker = null; }
+  preview = null; $('routeInfo').hidden = true; updateGoButton();
+}
+async function getStart() {
+  if (phonePos) return [phonePos.lat, phonePos.lon];
+  // No fake location yet: fall back to this Mac's approximate location
+  return new Promise(res => {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(p => res([p.coords.latitude, p.coords.longitude]), () => res(null), { timeout: 8000 });
+  });
+}
+async function fetchRoute(from, to) {
+  if (!followRoads) return { points: [from, to], distance: dist(from, to) };
+  const url = `https://routing.openstreetmap.de/routed-${how}/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
+  const r = await fetch(url);
+  const j = await r.json();
+  if (j.code !== 'Ok' || !j.routes?.length) throw new Error('No route');
+  const pts = j.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+  // Make sure the trip starts and ends exactly at the chosen points
+  return { points: [from, ...pts, to], distance: j.routes[0].distance };
+}
+async function previewRoute(fit = false) {
+  if (mode !== 'travel' || trip?.active) return;
+  if (!selected) { clearPreview(); return; }
+  const seq = ++previewSeq;
+  $('travelHint').textContent = 'Finding a route…';
+  const from = await getStart();
+  if (seq !== previewSeq) return;
+  if (!from) { $('travelHint').textContent = 'Teleport somewhere first so Lester knows where to start.'; clearPreview(); return; }
+  const to = [selected.lat, selected.lon];
+  let route, fallback = false;
+  try { route = await fetchRoute(from, to); }
+  catch { route = { points: [from, to], distance: dist(from, to) }; fallback = true; }
+  if (seq !== previewSeq) return;
+  preview = route;
+  if (previewLine) map.removeLayer(previewLine);
+  previewLine = L.polyline(route.points, { color: '#ffffff', weight: 4, opacity: .75, dashArray: '2 9', lineCap: 'round' }).addTo(map);
+  if (!startMarker) startMarker = L.marker(from, { icon: startIcon, interactive: false }).addTo(map); else startMarker.setLatLng(from);
+  $('travelHint').textContent = fallback
+    ? 'No road route found, so Lester will go in a straight line.'
+    : followRoads ? 'Your iPhone starts from where it is now and follows roads.' : 'Your iPhone goes in a straight line from where it is now.';
+  updateRouteInfo(); updateGoButton();
+  if (fit) map.fitBounds(previewLine.getBounds(), { paddingTopLeft: [innerWidth > 720 ? 420 : 20, 40], paddingBottomRight: [40, innerWidth > 720 ? 40 : innerHeight * .65] });
+}
+function updateRouteInfo() {
+  if (!preview || trip?.active) { if (!trip?.active) $('routeInfo').hidden = true; return; }
+  $('routeInfo').hidden = false;
+  $('riDist').textContent = fmtDist(preview.distance);
+  $('riTime').textContent = fmtTime(preview.distance / (speedKmh / 3.6));
+}
+
+/* ---------- Trip (live) ---------- */
+let trip = null;          // { id, route, cum, total, duration, elapsed, at, active, stopped, done }
+let doneLine = null, todoLine = null, rafId = null;
+
+function buildTrip(t) {
+  const cum = [0];
+  for (let i = 1; i < t.route.length; i++) cum.push(cum[i - 1] + dist(t.route[i - 1], t.route[i]));
+  return { id: t.id, route: t.route, cum, total: cum[cum.length - 1], duration: t.duration, elapsed: t.elapsed, at: performance.now(),
+           stopped: t.stopped, paused: t.paused, done: t.done, active: !t.done && !t.stopped && !t.paused };
+}
+function tripElapsed() {
+  if (!trip) return 0;
+  if (!trip.active) return trip.elapsed;
+  return Math.min(trip.duration, trip.elapsed + (performance.now() - trip.at) / 1000);
+}
+function pointAt(frac) { // position along the route by distance fraction (speed is constant)
+  const target = frac * trip.total, { cum, route } = trip;
+  let lo = 0, hi = cum.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] < target) lo = mid + 1; else hi = mid; }
+  if (lo === 0) return { i: 0, p: route[0] };
+  const a = route[lo - 1], b = route[lo], seg = cum[lo] - cum[lo - 1];
+  const f = seg ? (target - cum[lo - 1]) / seg : 1;
+  return { i: lo, p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f] };
+}
+function drawTrip() {
+  if (!trip) return;
+  const el = tripElapsed(), frac = trip.duration ? el / trip.duration : 1;
+  const { i, p } = pointAt(Math.min(1, frac));
+  const done = [...trip.route.slice(0, i), p], todo = [p, ...trip.route.slice(i)];
+  if (!doneLine) doneLine = L.polyline(done, { color: '#ff2a3c', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round', className: 'route-glow' }).addTo(map);
+  else doneLine.setLatLngs(done);
+  if (!todoLine) todoLine = L.polyline(todo, { color: '#ffffff', weight: 4, opacity: .6, dashArray: '2 9', lineCap: 'round' }).addTo(map);
+  else todoLine.setLatLngs(todo);
+  todoLine.bringToBack();
+  setPhone({ lat: p[0], lon: p[1] });
+  // Panel
+  $('progBar').style.width = `${Math.min(100, frac * 100).toFixed(2)}%`;
+  $('tripLeft').innerHTML = trip.active ? `<b>${fmtTime(trip.duration - el)}</b> left` : trip.paused ? '<b>Reconnecting…</b>' : trip.stopped ? '<b>Stopped</b> here' : '<b>Arrived</b>';
+  $('tripDone').textContent = `${fmtDist(trip.total * Math.min(1, frac))} of ${fmtDist(trip.total)}`;
+  if (trip.active && el >= trip.duration) { trip.active = false; trip.done = true; trip.elapsed = trip.duration; toast(`${deviceName} arrived`); updateGoButton(); }
+}
+function loop() { drawTrip(); rafId = trip?.active ? requestAnimationFrame(loop) : null; }
+function showTrip(t) {
+  const isNew = !trip || trip.id !== t.id;
+  if (isNew && !t.route) return false;       // need the full route first
+  if (isNew) {
+    trip = buildTrip(t);
+    if (!selected) { // e.g. after a reload: show the trip's destination
+      const end = trip.route[trip.route.length - 1];
+      select(end[0], end[1], 'Trip destination', '', false);
+    }
+  }
+  else Object.assign(trip, { elapsed: t.elapsed, at: performance.now(), stopped: t.stopped, paused: t.paused, done: t.done, active: !t.done && !t.stopped && !t.paused });
+  if (previewLine) { map.removeLayer(previewLine); previewLine = null; }
+  if (!startMarker) startMarker = L.marker(trip.route[0], { icon: startIcon, interactive: false }).addTo(map);
+  else startMarker.setLatLng(trip.route[0]);
+  $('tripBox').hidden = false; $('routeInfo').hidden = true;
+  $('travelHint').textContent = trip.active ? 'Your iPhone is on the move. The red line is the route it has taken.' : 'The red line is the route your iPhone took.';
+  if (!rafId) loop();
+  updateGoButton();
+  return true;
+}
+function clearTrip() {
+  trip = null;
+  [doneLine, todoLine].forEach(l => l && map.removeLayer(l)); doneLine = todoLine = null;
+  if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+  $('tripBox').hidden = true;
+  $('travelHint').textContent = 'Your iPhone starts from where it is now.';
+  updateGoButton();
+}
+
+/* ---------- Main button ---------- */
+function updateGoButton() {
+  const b = $('goBtn'), label = b.querySelector('span');
+  if (b.dataset.busy) return;
+  b.classList.remove('white');
+  if (mode === 'teleport') { label.textContent = 'Teleport here'; b.disabled = !selected; return; }
+  if (trip?.active || trip?.paused) { label.textContent = 'Stop here'; b.classList.add('white'); b.disabled = false; return; }
+  if (trip && !preview) { label.textContent = 'Clear route'; b.classList.add('white'); b.disabled = false; return; }
+  label.textContent = 'Start trip'; b.disabled = !preview;
+}
+async function busy(btn, text, fn) {
+  const label = btn.querySelector('span'), ico = btn.querySelector('svg'), old = label.textContent;
+  btn.dataset.busy = 1; btn.disabled = true; label.textContent = text; if (ico) ico.style.display = 'none';
+  const spin = document.createElement('i'); spin.className = 'spin'; btn.prepend(spin);
+  try { await fn(); } catch (e) { toast(e.message, 'err'); }
+  spin.remove(); if (ico) ico.style.display = ''; label.textContent = old; delete btn.dataset.busy; updateGoButton();
+}
+function addRecent(p) {
+  const rec = store.get('recent', []).filter(r => !(r.lat === p.lat && r.lon === p.lon));
+  rec.unshift({ lat: p.lat, lon: p.lon, name: p.name, sub: p.sub }); store.set('recent', rec.slice(0, 12)); renderList();
+}
+
+$('goBtn').onclick = () => {
+  const b = $('goBtn');
+  if (mode === 'teleport') {
+    if (!selected) return;
+    return busy(b, 'Teleporting…', async () => {
+      const j = await api('/api/set', { lat: selected.lat, lon: selected.lon });
+      clearTrip(); setPhone(j.current);
+      toast(`${j.device} is now in ${selected.name}`); addRecent(selected);
+    });
+  }
+  if (trip?.active || trip?.paused) {
+    return busy(b, 'Stopping…', async () => {
+      const j = await api('/api/stop', {});
+      if (j.trip) showTrip(j.trip);
+      toast('Stopped. Your iPhone stays here.');
+    });
+  }
+  if (trip && !preview) { clearTrip(); previewRoute(true); return; }
+  if (!preview) return;
+  return busy(b, 'Starting…', async () => {
+    const route = preview.points;
+    const j = await api('/api/travel', { points: route, speed: speedKmh / 3.6 });
+    clearTrip();
+    showTrip({ ...j.trip, route });
+    preview = null;
+    toast(`${j.device} is heading to ${selected.name}`); addRecent(selected);
+  });
+};
+
+$('resetBtn').onclick = async () => {
+  const b = $('resetBtn'); b.disabled = true;
+  try { await api('/api/clear', {}); clearTrip(); setPhone(null); toast('Back on your real location'); }
+  catch (e) { toast(e.message, 'err'); }
+  b.disabled = false;
+};
+
+$('saveBtn').onclick = () => {
+  if (!selected) return;
+  let s = store.get('saved', []);
+  if (isSaved(selected)) { s = s.filter(p => !(p.lat === selected.lat && p.lon === selected.lon)); toast('Removed from saved'); }
+  else { s.unshift({ lat: selected.lat, lon: selected.lon, name: selected.name, sub: selected.sub }); toast(`Saved ${selected.name}`); }
+  store.set('saved', s); $('saveBtn').classList.toggle('saved', isSaved(selected)); renderList();
+};
+
+// Two-click quit: works in the Lester window, where pop-up confirm dialogs don't show
+let quitArmed = 0;
+$('quitBtn').onclick = async () => {
+  if (Date.now() - quitArmed > 3000) {
+    quitArmed = Date.now(); $('quitBtn').classList.add('armed');
+    toast('Click again to quit. Your iPhone will go back to its real location.', 'err');
+    setTimeout(() => $('quitBtn').classList.remove('armed'), 3000);
+    return;
+  }
+  try { await api('/api/quit', {}); } catch {}
+  clearInterval(pollTimer); cancelAnimationFrame(rafId);
+  const d = document.createElement('div'); d.className = 'bye';
+  d.innerHTML = `<div><div class="logo" style="margin:auto;width:56px;height:56px;border-radius:16px">
+    <svg width="28" height="28" viewBox="0 0 24 24"><path d="M6.5 3h4.6v12.4h6.4V20H6.5z" fill="#ff2a3c"/></svg></div>
+    <b>Lester has quit</b>Your iPhone is back on its real location.</div>`;
+  document.body.appendChild(d);
+};
+
+/* ---------- Use on iPhone (Mac only) ---------- */
+let remoteUrl = null, resetArmed = 0;
+function renderRemote(r) {
+  $('remoteSw').classList.toggle('on', r.enabled); $('remoteSw').setAttribute('aria-checked', r.enabled);
+  remoteUrl = r.url;
+  $('remoteOn').hidden = !(r.enabled && r.url);
+  $('remoteOff').hidden = r.enabled && !!r.url;
+  $('remoteOff').textContent = !r.enabled ? 'Off. Phones can’t reach Lester.'
+    : 'Lester can’t find this Mac’s Wi-Fi address. Check the Mac is connected to Wi-Fi.';
+  if (r.url) {
+    $('remoteUrl').textContent = r.url.replace(/\?k=.*/, '?k=••••••');
+    try { const qr = qrcode(0, 'M'); qr.addData(r.url); qr.make(); $('qr').innerHTML = qr.createSvgTag(6, 0); }
+    catch { $('qr').textContent = 'QR code unavailable. Copy the link instead.'; }
+  }
+}
+async function openPhoneSheet() {
+  $('phoneSheet').hidden = false;
+  loadPairPhones();
+  try { renderRemote(await api('/api/remote')); } catch (e) { toast(e.message, 'err'); }
+}
+
+/* ---------- Set up Lester for iPhone: guide (Mac only) ---------- */
+function pairMessage(text, kind) {
+  const m = $('pairMsg'); m.textContent = text; m.className = 'hint ' + (kind || ''); m.hidden = !text;
+}
+let setupState = null, setupChecking = false, setupTimer = null, appleDevicesMissing = false;
+async function loadPairPhones() {
+  const sel = $('pairPhone'), keep = sel.value;
+  try {
+    const j = await api('/api/usb-phones');
+    appleDevicesMissing = !!j.appleDevicesMissing;
+    sel.innerHTML = j.phones.length ? '' : '<option value="">No iPhone plugged in</option>';
+    j.phones.forEach(p => {
+      const o = document.createElement('option'); o.value = p.udid;
+      o.textContent = `${p.name} (iOS ${p.ios}, ${p.connection === 'USB' ? 'cable' : 'Wi-Fi'})`; sel.appendChild(o);
+    });
+    if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+  } catch { sel.innerHTML = '<option value="">Couldn’t look for iPhones</option>'; }
+  refreshGuide();
+}
+async function refreshGuide() {
+  const udid = $('pairPhone').value;
+  if (!udid) { setupState = { connected: false }; renderGuide(); return; }
+  if (setupChecking) return;
+  setupChecking = true; $('setupRefresh').classList.add('spinning');
+  try { setupState = await api('/api/iphone-setup?udid=' + encodeURIComponent(udid)); }
+  catch { setupState = setupState || { connected: false }; }
+  setupChecking = false; $('setupRefresh').classList.remove('spinning');
+  renderGuide();
+}
+let guideOpen = null, guideSig = '', guideDone = [], renewing = false;
+function installHtml(st) {
+  const job = st.installJob || {};
+  if (!st.canInstall) {
+    return 'Download the app, then install it with a free sideloading app such as <b>Sideloadly</b> or <b>AltStore</b>, signing in with your Apple ID.' +
+      '<div class="acts"><button class="act" data-act="download"><span>⬇ Download Lester for iPhone</span></button></div>';
+  }
+  if (job.state === 'running') {
+    return `<b>${esc(job.text || 'Working…')}</b>` +
+      `<div class="gprog"><div class="bar"><i style="width:${Math.round((job.progress || 0) * 100)}%"></i></div><span>${Math.round((job.progress || 0) * 100)}%</span></div>` +
+      'Keep the iPhone plugged in and unlocked.<div class="acts"><button class="act white small" data-act="install-cancel"><span>Cancel</span></button></div>';
+  }
+  if (job.state === '2fa') {
+    const others = (job.numbers || []).map(n => `<button class="act white small" data-act="tfa-sms" data-id="${n.id}"><span>Text ${esc(n.number)}</span></button>`).join('');
+    return `<b>${esc(job.text)}</b>` + (job.lastError ? `<br>${esc(job.lastError)}` : '') +
+      '<div class="cmd"><input class="gfield" id="tfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6-digit code">' +
+      '<button class="act" data-act="tfa-submit"><span>Continue</span></button></div>' +
+      `<div class="acts"><button class="act white small" data-act="tfa-resend"><span>Send a new code</span></button>${job.sms ? '<button class="act white small" data-act="tfa-devices"><span>Send to my devices</span></button>' : ''}${others}</div>`;
+  }
+  if (job.state === 'certs') {
+    return `<b>${esc(job.text)}</b> Apps signed with the one you replace stop opening until they’re signed again.` +
+      '<div class="certs">' + (job.certs || []).map((c, i) =>
+        `<label><input type="radio" name="cert" value="${esc(c.serial)}" ${i === 0 ? 'checked' : ''}> ${esc(c.name)}${c.machine ? ` <span>(${esc(c.machine)})</span>` : ''}</label>`).join('') + '</div>' +
+      '<div class="acts"><button class="act" data-act="cert-replace"><span>Replace it</span></button><button class="act white small" data-act="install-cancel"><span>Cancel</span></button></div>';
+  }
+  return (job.state === 'error' ? `<b class="bad">${esc(job.text)}</b><br>` : '') +
+    'Sign in with your Apple ID and Lester signs and installs the app for you, like Xcode does. A free Apple ID works. ' +
+    'Your password goes only to Apple and is never saved. You can use a spare Apple ID if you prefer.' +
+    `<div class="signin"><input class="gfield" id="aid" type="email" autocomplete="username" placeholder="Apple ID email" value="${esc(st.appleId || '')}">` +
+    '<input class="gfield" id="apw" type="password" autocomplete="current-password" placeholder="Password"></div>' +
+    '<label class="remember"><input type="checkbox" id="aidRemember" checked> Remember my Apple ID email on this Mac</label>' +
+    '<div class="acts"><button class="act" data-act="install"><span>Install Lester for iPhone</span></button></div>' +
+    '<span class="alt">Prefer a sideloading app? <button class="linkbtn" data-act="download">Download the .ipa</button></span>';
+}
+function guideSteps(st) {
+  const job = st.devmodeJob || {};
+  return [
+    { title: 'Plug in and trust this Mac', done: !!st.trusted,
+      html: !st.connected && appleDevicesMissing ? 'Windows needs Apple’s iPhone driver first. Install the free <b>Apple Devices</b> app from the Microsoft Store, then plug the iPhone in with a cable and unlock it.' +
+          '<div class="acts"><button class="act" data-act="apple-devices"><span>Get Apple Devices</span></button></div>'
+        : !st.connected ? 'Plug the iPhone into this Mac with a cable and unlock it.'
+        : st.unreachable ? 'The iPhone isn’t answering. Unlock it, or plug it in with a cable, and Lester checks again.'
+        : st.iosOk === false ? `This iPhone has iOS ${esc(st.ios)}. Lester for iPhone needs <b>iOS 17.4 or newer</b>: update it in <b>Settings → General → Software Update</b>.`
+        : 'Unlock the iPhone. When it asks, tap <b>Trust</b> and enter its passcode.<br>No prompt? Open <b>Finder</b>, click the iPhone in the sidebar, then click <b>Trust</b>.',
+      doneHtml: `<span class="ok">${esc(st.name || 'Your iPhone')} trusts this Mac.</span>` },
+    { title: 'Turn on Developer Mode', done: st.devmode === true,
+      html: '<ol class="mini">' +
+        '<li>On the iPhone, open <b>Settings → Privacy & Security → Developer Mode</b>. Turn it on and tap <b>Restart</b>. After it restarts, tap <b>Turn On</b> and enter the passcode.</li>' +
+        '<li><b>Don’t see Developer Mode?</b> Keep the iPhone plugged in and run this command on this Mac: open <b>Terminal</b> (press <b>⌘ Space</b>, type <b>Terminal</b>, press <b>Return</b>), paste it and press <b>Return</b>.' +
+        (st.revealCommand ? `<div class="cmd" style="margin-top:6px"><code>${esc(st.revealCommand)}</code><button class="act white small" data-act="copycmd"><span>Copy</span></button></div>` : '') + '</li>' +
+        '<li>The <b>Developer Mode</b> switch now shows at the bottom of <b>Settings → Privacy & Security</b> (close and reopen Settings if needed). Then do point 1.</li></ol>',
+      doneHtml: '<span class="ok">Developer Mode is on.</span>' },
+    { title: 'Install Lester for iPhone', done: !!st.app && !renewing && !['running', '2fa', 'certs'].includes((st.installJob || {}).state),
+      html: installHtml(st),
+      doneHtml: '<span class="ok">Lester for iPhone is installed.</span> Apple’s free signing lasts 7 days: renew it here each week (Lester on the iPhone reminds you).' +
+        (st.canInstall ? '<div class="acts"><button class="act white" data-act="renew"><span>Renew now</span></button></div>' : '') },
+    { title: 'Install LocalDevVPN', done: !!st.vpn,
+      html: 'It’s free on the App Store. Scan this with the iPhone’s Camera, or search the App Store for <b>LocalDevVPN</b>.', qr: st.vpnUrl,
+      doneHtml: '<span class="ok">LocalDevVPN is installed.</span>' },
+    { title: 'Pair Lester with this iPhone', done: !!st.paired,
+      html: (st.connected && !st.usb ? '<b>Plug in the cable for this step:</b> iPhones only allow new pairings over a cable.<br>' : '') +
+        'Keep the iPhone unlocked. When it asks, tap <b>Trust</b> and enter the passcode. You only do this once.',
+      actions: [{ id: 'pair', label: 'Pair', disabled: !(st.trusted && st.devmode && st.app && st.usb) }],
+      doneHtml: '<span class="ok">Paired.</span>' },
+    { title: 'Start using it', done: false, final: true,
+      html: 'On the iPhone, open <b>LocalDevVPN</b> and tap <b>Connect</b>, then open <b>Lester</b> and teleport.<br>Renew Lester every 7 days. Lester reminds you a day before.' },
+  ];
+}
+function renderGuide() {
+  const st = { ...(setupState || {}) }, ol = $('guide');
+  if ((st.devmodeJob || {}).state === 'running') st.trusted = true;   // the iPhone vanishes while it restarts
+  const steps = guideSteps(st);
+  const nowIdx = steps.findIndex(x => !x.done);
+  const done = steps.filter(x => x.done && !x.final).length, total = steps.length - 1;
+  $('gprogBar').style.width = `${(done / total) * 100}%`;
+  $('gprogText').textContent = done === total ? 'All set' : `${done} of ${total} done`;
+  // Only redraw when something changed, so open steps and animations aren't interrupted
+  const sig = JSON.stringify([steps.map(x => [x.done, x.html, x.actions]), nowIdx, guideOpen]);
+  if (sig === guideSig && ol.children.length) return;
+  const justDone = steps.map((x, i) => x.done && guideDone[i] === false);
+  guideDone = steps.map(x => x.done);
+  // Finishing the open step moves on to the next one
+  if (guideOpen >= 0 && justDone[guideOpen]) guideOpen = null;
+  guideSig = JSON.stringify([steps.map(x => [x.done, x.html, x.actions]), nowIdx, guideOpen]);
+  const openIdx = guideOpen ?? nowIdx;
+  // Keep anything typed (and the cursor) when the guide redraws
+  const kept = {}; let focused = document.activeElement && document.activeElement.id;
+  ol.querySelectorAll('input[id]').forEach(i => { kept[i.id] = i.type === 'checkbox' ? i.checked : i.value; });
+  ol.innerHTML = '';
+  steps.forEach((x, i) => {
+    const li = document.createElement('li');
+    li.className = 'gstep' + (x.done ? ' done' : i === nowIdx ? ' now' : '') + (i === openIdx ? ' open' : '') + (justDone[i] ? ' justdone' : '');
+    const chip = x.done ? 'Done' : i === nowIdx ? 'Next' : x.final ? 'Last' : 'To do';
+    const acts = (x.actions || []).filter(() => !x.done);
+    li.innerHTML =
+      `<button class="ghead" data-step="${i}" aria-expanded="${i === openIdx}"><span class="num">${x.done ? '✓' : i + 1}</span>` +
+      `<span class="ttl">${x.title}</span><span class="chip">${chip}</span>` +
+      `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>` +
+      `<div class="gbody"><div><div class="gin"><div class="txt">${x.done && x.doneHtml ? x.doneHtml : x.html}</div>` +
+      (x.qr && !x.done ? '<div class="qrmini" data-qr></div>' : '') +
+      (acts.length ? '<div class="acts">' + acts.map(a => `<button class="act" data-act="${a.id}" ${a.disabled ? 'disabled' : ''}><span>${a.label}</span></button>`).join('') + '</div>' : '') +
+      '</div></div></div>';
+    ol.appendChild(li);
+    const qrBox = li.querySelector('[data-qr]');
+    if (qrBox) { try { const q = qrcode(0, 'M'); q.addData(x.qr); q.make(); qrBox.innerHTML = q.createSvgTag(3, 0); } catch {} }
+  });
+  ol.querySelectorAll('input[id]').forEach(i => {
+    if (!(i.id in kept)) return;
+    if (i.type === 'checkbox') i.checked = kept[i.id]; else if (kept[i.id]) i.value = kept[i.id];
+  });
+  if (focused && $(focused)) $(focused).focus();
+}
+// Click a step to open it (one at a time); click again to close
+$('guide').addEventListener('click', e => {
+  const head = e.target.closest('.ghead'); if (!head) return;
+  const i = +head.dataset.step, li = head.parentElement, wasOpen = li.classList.contains('open');
+  $('guide').querySelectorAll('.gstep.open').forEach(x => { x.classList.remove('open'); x.querySelector('.ghead').setAttribute('aria-expanded', 'false'); });
+  if (!wasOpen) { li.classList.add('open'); head.setAttribute('aria-expanded', 'true'); }
+  guideOpen = wasOpen ? -1 : i;
+  guideSig = '';   // the next check redraws with this choice kept
+});
+$('guide').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const udid = $('pairPhone').value, act = btn.dataset.act;
+  if (act === 'renew') { renewing = true; guideOpen = 2; guideSig = ''; renderGuide(); return; }
+  if (act === 'install' || act.startsWith('tfa-') || act === 'cert-replace' || act === 'install-cancel') {
+    const udid = $('pairPhone').value; if (!udid) return;
+    let path = '/api/iphone-setup/install/answer', body = { udid };
+    if (act === 'install') {
+      const appleId = ($('aid')?.value || '').trim(), password = $('apw')?.value || '';
+      if (!appleId || !password) return toast('Enter your Apple ID email and password', 'err');
+      path = '/api/iphone-setup/install'; body = { udid, appleId, password, remember: !!$('aidRemember')?.checked };
+    } else if (act === 'tfa-submit') body.code = ($('tfaCode')?.value || '').replace(/\D/g, '');
+    else if (act === 'tfa-resend') body.action = 'resend';
+    else if (act === 'tfa-devices') body.action = 'devices';
+    else if (act === 'tfa-sms') { body.action = 'sms'; body.id = +btn.dataset.id; }
+    else if (act === 'cert-replace') { const c = document.querySelector('input[name=cert]:checked'); body.revoke = c ? [c.value] : []; }
+    else if (act === 'install-cancel') path = '/api/iphone-setup/install/cancel';
+    try {
+      const job = await api(path, body);
+      if (act === 'install') { const pw = $('apw'); if (pw) pw.value = ''; }   // don't leave the password on screen
+      setupState = { ...setupState, installJob: act === 'install-cancel' ? null : job };
+      if (act === 'install-cancel') renewing = false;
+      guideSig = ''; renderGuide(); pollInstall();
+    } catch (err) { toast(err.message, 'err'); }
+    return;
+  }
+  if (act === 'copycmd') {
+    navigator.clipboard?.writeText(setupState?.revealCommand || '').then(() => toast('Copied. Paste it into Terminal and press Return.'));
+    return;
+  }
+  if (act === 'devmode') {
+    try {
+      const j = await api('/api/iphone-setup/devmode', { udid: $('pairPhone').value });
+      setupState = { ...setupState, devmodeJob: j }; renderGuide();
+      toast('Turning on Developer Mode. Your iPhone will restart.');
+      setTimeout(refreshGuide, 4000);
+    } catch (err) { toast(err.message, 'err'); }
+    return;
+  }
+  if (act === 'apple-devices') {
+    try { await api('/api/open-apple-devices', {}); } catch (err) { toast(err.message, 'err'); }
+    return;
+  }
+  if (act === 'download') {
+    try { const j = await api('/api/iphone-setup/download', {}); toast(`Saved ${j.file} to your Downloads`); } catch (err) { toast(err.message, 'err'); }
+    return;
+  }
+  if (!udid) return;
+  if (act === 'reveal') {
+    try { await api('/api/iphone-setup/reveal', { udid }); toast('Done. Now check Settings → Privacy & Security on the iPhone.'); }
+    catch (err) { toast(err.message, 'err'); }
+    return;
+  }
+  if (act === 'pair') {
+    pairMessage('Look at your iPhone: unlock it, then tap Trust and enter your passcode when it asks.', 'ok');
+    await busy(btn, 'Pairing…', async () => {
+      try {
+        const j = await api('/api/pair-phone', { udid });
+        pairMessage(`Paired ${j.device}. On the iPhone, connect LocalDevVPN, open Lester and teleport.`, 'ok');
+        toast(`${j.device} is paired with Lester for iPhone`);
+      } catch (err) { pairMessage(err.message, 'err'); throw err; }
+    });
+    refreshGuide();
+  }
+});
+$('pairPhone').onchange = () => { setupState = null; guideOpen = null; guideDone = []; renderGuide(); refreshGuide(); };
+$('pairPhone').onfocus = loadPairPhones;
+$('setupRefresh').onclick = loadPairPhones;
+// Return in the sign-in or code box submits it
+$('guide').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const id = e.target.id;
+  const act = (id === 'aid' || id === 'apw') ? 'install' : id === 'tfaCode' ? 'tfa-submit' : null;
+  if (act) { e.preventDefault(); $('guide').querySelector(`button[data-act="${act}"]`)?.click(); }
+});
+let installTimer = null;
+function pollInstall() {
+  clearTimeout(installTimer);
+  const s = (setupState?.installJob || {}).state;
+  if (s === 'done') renewing = false;
+  if (['running', '2fa', 'certs'].includes(s) && !$('phoneSheet').hidden) installTimer = setTimeout(async () => { await refreshGuide(); pollInstall(); }, 1500);
+}
+// While the screen is open, keep checking so steps tick off as you do them on the iPhone
+setInterval(() => { if (!$('phoneSheet').hidden) loadPairPhones(); }, 8000);
+$('phoneBtn').onclick = openPhoneSheet;
+$('phoneClose').onclick = () => { $('phoneSheet').hidden = true; };
+$('phoneSheet').onclick = e => { if (e.target === $('phoneSheet')) $('phoneSheet').hidden = true; };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('phoneSheet').hidden = true; });
+async function toggleRemote() {
+  const on = !$('remoteSw').classList.contains('on');
+  try { renderRemote(await api('/api/remote', { enabled: on })); toast(on ? 'Phones on this Wi-Fi can now use Lester' : 'Phone access is off'); }
+  catch (e) { toast(e.message, 'err'); }
+}
+$('remoteSw').onclick = toggleRemote;
+$('remoteSw').onkeydown = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleRemote(); } };
+$('copyUrl').onclick = () => remoteUrl && navigator.clipboard?.writeText(remoteUrl).then(() => toast('Link copied'));
+$('resetKey').onclick = async () => {
+  if (Date.now() - resetArmed > 3000) {
+    resetArmed = Date.now(); $('resetKey').classList.add('armed');
+    setTimeout(() => $('resetKey').classList.remove('armed'), 3000);
+    toast('Click again to make a new code. Phones you added will need to scan again.', 'err');
+    return;
+  }
+  resetArmed = 0; $('resetKey').classList.remove('armed');
+  try { renderRemote(await api('/api/remote/reset', {})); toast('New code ready. Scan it on your phones again.'); }
+  catch (e) { toast(e.message, 'err'); }
+};
+
+/* ---------- Joystick (always on the map) ---------- */
+const JOY_SPEEDS = { walk: ['🚶', 5], bike: ['🚲', 16], drive: ['🚗', 50] };
+let joyHow = store.get('joyHow', 'walk'); if (!JOY_SPEEDS[joyHow]) joyHow = 'walk';
+let joyVec = { x: 0, y: 0 }, keyVec = { x: 0, y: 0 }, joySending = false, joyLast = performance.now();
+const keysDown = new Set();
+function renderJoyHow() { const [e, k] = JOY_SPEEDS[joyHow]; $('joyHow').textContent = `${e} ${k} km/h`; }
+$('joyHow').onclick = () => { const k = Object.keys(JOY_SPEEDS); joyHow = k[(k.indexOf(joyHow) + 1) % k.length]; store.set('joyHow', joyHow); renderJoyHow(); };
+renderJoyHow();
+(() => {
+  const pad = $('pad'), knob = $('knob'), R = 62 - 25;
+  let dragging = false;
+  const setKnob = (dx, dy) => { knob.style.transform = `translate(${dx}px, ${dy}px)`; };
+  const move = e => {
+    const r = pad.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy); if (len > R) { dx = dx / len * R; dy = dy / len * R; }
+    setKnob(dx, dy); joyVec = { x: dx / R, y: -dy / R };
+  };
+  pad.addEventListener('pointerdown', e => { dragging = true; pad.classList.add('drag'); pad.setPointerCapture(e.pointerId); move(e); });
+  pad.addEventListener('pointermove', e => { if (dragging) move(e); });
+  const end = () => { dragging = false; pad.classList.remove('drag'); setKnob(0, 0); joyVec = { x: 0, y: 0 }; };
+  pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+})();
+// Arrow keys / WASD steer too (not while typing)
+const KEYMAP = { ArrowUp: [0, 1], KeyW: [0, 1], ArrowDown: [0, -1], KeyS: [0, -1], ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0] };
+function typing() { const a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA'); }
+function updateKeyVec() {
+  let x = 0, y = 0; keysDown.forEach(k => { x += KEYMAP[k][0]; y += KEYMAP[k][1]; });
+  const len = Math.hypot(x, y) || 1; keyVec = { x: x / len * Math.min(1, Math.hypot(x, y)), y: y / len * Math.min(1, Math.hypot(x, y)) };
+}
+document.addEventListener('keydown', e => { if (KEYMAP[e.code] && !typing() && $('itinSheet').hidden && $('phoneSheet').hidden) { e.preventDefault(); keysDown.add(e.code); updateKeyVec(); } });
+document.addEventListener('keyup', e => { if (keysDown.delete(e.code)) updateKeyVec(); });
+window.addEventListener('blur', () => { keysDown.clear(); updateKeyVec(); });
+
+function stepFrom(p, meters, bearing) {   // bearing in radians, 0 = north
+  const R = 6371008.8, lat = p.lat * Math.PI / 180;
+  return { lat: Math.max(-89.9, Math.min(89.9, p.lat + meters * Math.cos(bearing) / R * 180 / Math.PI)),
+           lon: ((p.lon + meters * Math.sin(bearing) / (R * Math.max(Math.cos(lat), 1e-6)) * 180 / Math.PI + 540) % 360) - 180 };
+}
+async function joyTick() {
+  const now = performance.now(), dt = Math.min((now - joyLast) / 1000, 1.5); joyLast = now;
+  const v = Math.hypot(joyVec.x, joyVec.y) > Math.hypot(keyVec.x, keyVec.y) ? joyVec : keyVec;
+  const strength = Math.min(1, Math.hypot(v.x, v.y));
+  $('pad').classList.toggle('off', !phonePos);
+  if (strength < 0.08 || joySending) return;
+  if (!phonePos) { toast('Teleport somewhere first, then use the joystick to move around.', 'err'); joyVec = keyVec = { x: 0, y: 0 }; keysDown.clear(); return; }
+  if (trip?.active) clearTrip();                     // the joystick takes over from a trip
+  const next = stepFrom(phonePos, JOY_SPEEDS[joyHow][1] / 3.6 * dt * strength, Math.atan2(v.x, v.y));
+  joySending = true;
+  try {
+    const j = await api('/api/move', { lat: next.lat, lon: next.lon });
+    if (j.moved) { setPhone(next); map.panTo([next.lat, next.lon], { animate: true, duration: 0.3 }); setPill('on', 'Teleported'); }
+  } catch (e) { toast(e.message, 'err'); joyVec = keyVec = { x: 0, y: 0 }; keysDown.clear(); }
+  joySending = false;
+}
+setInterval(joyTick, 300);
+
+/* ---------- Itinerary ---------- */
+let itin = { enabled: false, repeatDaily: true, steps: [] }, itinLabels = {};
+function setSwitch(el, on) { el.classList.toggle('on', on); el.setAttribute('aria-checked', on); }
+function renderItin(j) {
+  itin = { enabled: j.enabled, repeatDaily: j.repeatDaily, steps: j.steps }; itinLabels = j.labels || {};
+  setSwitch($('itinOn'), itin.enabled); setSwitch($('itinRepeat'), itin.repeatDaily);
+  $('itinBtn').style.color = itin.enabled ? 'var(--red)' : '';
+  $('itinNext').textContent = itin.enabled ? (j.next ? `Next: ${j.next}` : 'No more steps today.') + (j.note ? ` · ${j.note}` : '')
+    : itin.steps.length ? 'Off. Turn it on to run these steps.' : 'Add steps below, for example 4:00 PM walk to B, then 5:00 PM walk back to A.';
+  const today = new Date().toLocaleDateString('en-CA');
+  const ul = $('itinSteps'); ul.innerHTML = '';
+  itin.steps.forEach(st => {
+    const li = document.createElement('li');
+    const label = itinLabels[st.id] || '';
+    const [t, ...rest] = label.split(': ');
+    li.innerHTML = `<span class="t">${esc(t)}</span><span class="w">${esc(rest.join(': '))}</span>` +
+      (st.lastRunDay === today ? '<span class="done">Done today</span>' : '') + '<button class="iconbtn" title="Remove">✕</button>';
+    li.querySelector('button').onclick = () => saveItin({ ...itin, steps: itin.steps.filter(x => x.id !== st.id) });
+    ul.appendChild(li);
+  });
+  renderDestChoices();
+}
+function renderDestChoices() {
+  const sel = $('stepDest'), opts = [];
+  if (selected) opts.push({ name: selected.name, lat: selected.lat, lon: selected.lon, label: `${selected.name} (pin on the map)` });
+  if (phonePos) opts.push({ name: 'starting point', lat: phonePos.lat, lon: phonePos.lon, label: 'Where your iPhone is now' });
+  itin.steps.forEach(st => { if (!opts.some(o => dist([o.lat, o.lon], [st.lat, st.lon]) < 5)) opts.push({ name: st.name, lat: st.lat, lon: st.lon, label: st.name }); });
+  sel.innerHTML = opts.length ? '' : '<option value="">Drop a pin or teleport first</option>';
+  opts.forEach((o, i) => { const el = document.createElement('option'); el.value = i; el.textContent = o.label; el._dest = o; sel.appendChild(el); });
+  $('stepAdd').disabled = !opts.length;
+}
+async function saveItin(next) {
+  try { renderItin(await api('/api/itinerary', next)); } catch (e) { toast(e.message, 'err'); }
+}
+async function openItin() {
+  $('itinSheet').hidden = false;
+  if (!$('stepTime').value) { const d = new Date(Date.now() + 3600e3); $('stepTime').value = `${String(d.getHours()).padStart(2, '0')}:00`; }
+  try { renderItin(await api('/api/itinerary')); } catch (e) { toast(e.message, 'err'); }
+}
+$('itinBtn').onclick = openItin;
+$('itinClose').onclick = () => { $('itinSheet').hidden = true; };
+$('itinSheet').onclick = e => { if (e.target === $('itinSheet')) $('itinSheet').hidden = true; };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('itinSheet').hidden = true; });
+const toggleSw = (key) => () => {
+  if (key === 'enabled' && !itin.steps.length) return toast('Add a step first', 'err');
+  saveItin({ ...itin, [key]: !itin[key] });
+};
+$('itinOn').onclick = toggleSw('enabled'); $('itinRepeat').onclick = toggleSw('repeatDaily');
+['itinOn', 'itinRepeat'].forEach(id => $(id).onkeydown = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); $(id).click(); } });
+$('stepAdd').onclick = () => {
+  const [h, m] = ($('stepTime').value || '').split(':').map(Number);
+  const opt = $('stepDest').selectedOptions[0];
+  if (!(h >= 0) || !opt || !opt._dest) return toast('Pick a time and a destination', 'err');
+  const d = opt._dest;
+  saveItin({ ...itin, steps: [...itin.steps, { id: Math.random().toString(36).slice(2, 10), hour: h, minute: m, action: $('stepAction').value, name: d.name, lat: d.lat, lon: d.lon }] });
+};
+// Keep the header button and next-step line fresh
+setInterval(() => { if (!$('itinSheet').hidden) api('/api/itinerary').then(renderItin).catch(() => {}); }, 15000);
+api('/api/itinerary').then(renderItin).catch(() => {});
+
+/* ---------- Recent / Saved ---------- */
+let tab = store.get('tab', 'recent');
+document.querySelectorAll('#listSeg button').forEach(btn => {
+  btn.classList.toggle('on', btn.dataset.tab === tab);
+  btn.onclick = () => { tab = btn.dataset.tab; store.set('tab', tab);
+    document.querySelectorAll('#listSeg button').forEach(x => x.classList.toggle('on', x === btn)); renderList(); };
+});
+function renderList() {
+  const items = store.get(tab, []), el = $('list');
+  el.innerHTML = '';
+  if (!items.length) {
+    el.innerHTML = `<li class="none">${tab === 'saved' ? 'Tap ☆ to save places you use often' : 'Places you go to show up here'}</li>`;
+    return;
+  }
+  items.forEach((it, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="dot">${tab === 'saved' ? '★' : '↺'}</span>
+      <span class="txt"><b>${esc(it.name)}</b><span>${fmt(it.lat, it.lon)}</span></span>
+      <button class="iconbtn x" title="Remove">✕</button>`;
+    li.onclick = () => select(it.lat, it.lon, it.name, it.sub);
+    li.querySelector('.x').onclick = ev => { ev.stopPropagation(); items.splice(i, 1); store.set(tab, items); renderList();
+      if (selected) $('saveBtn').classList.toggle('saved', isSaved(selected)); };
+    el.appendChild(li);
+  });
+}
+
+/* ---------- Quick picks ---------- */
+const CITIES = [
+  ['Tokyo', 35.6762, 139.6503], ['New York', 40.7580, -73.9855], ['Paris', 48.8566, 2.3522],
+  ['London', 51.5072, -0.1276], ['Dubai', 25.1972, 55.2744], ['Sydney', -33.8568, 151.2153],
+  ['Los Angeles', 34.0522, -118.2437], ['Toronto', 43.6532, -79.3832],
+];
+CITIES.forEach(([n, lat, lon]) => {
+  const c = document.createElement('button'); c.className = 'chip'; c.textContent = n;
+  c.onclick = () => select(lat, lon, n, ''); $('chips').appendChild(c);
+});
+
+/* ---------- Search (places or coordinates) ---------- */
+const q = $('q'), results = $('results');
+let searchTimer, activeIdx = -1, lastHits = [];
+function closeResults() { results.classList.remove('show'); activeIdx = -1; }
+function parseCoords(s) {
+  const m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!m) return null;
+  const lat = +m[1], lon = +m[2];
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+}
+function renderHits(hits) {
+  lastHits = hits; activeIdx = -1;
+  results.innerHTML = hits.length ? '' : '<li class="note">No places found</li>';
+  hits.forEach((h, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<b>${esc(h.name)}</b><span>${esc(h.sub)}</span>`;
+    li.onmousedown = e => { e.preventDefault(); pick(i); };
+    results.appendChild(li);
+  });
+  results.classList.add('show');
+}
+function pick(i) {
+  const h = lastHits[i]; if (!h) return;
+  select(h.lat, h.lon, h.name, h.sub); q.value = ''; q.blur(); closeResults();
+}
+q.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const s = q.value.trim();
+  if (!s) return closeResults();
+  const c = parseCoords(s);
+  if (c) return renderHits([{ ...c, name: 'Custom location', sub: `Go to ${fmt(c.lat, c.lon)}` }]);
+  if (s.length < 3) return closeResults();
+  results.innerHTML = '<li class="note">Searching…</li>'; results.classList.add('show');
+  searchTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&q=' + encodeURIComponent(s));
+      const res = await r.json();
+      if (q.value.trim() !== s) return;
+      renderHits(res.map(p => {
+        const parts = p.display_name.split(', ');
+        return { lat: +p.lat, lon: +p.lon, name: parts[0], sub: parts.slice(1).join(', ') };
+      }));
+    } catch { results.innerHTML = '<li class="note">Search is offline. Check your internet.</li>'; }
+  }, 350);
+});
+q.addEventListener('keydown', e => {
+  const n = results.querySelectorAll('li:not(.note)').length;
+  if (e.key === 'ArrowDown' && n) { activeIdx = (activeIdx + 1) % n; e.preventDefault(); }
+  else if (e.key === 'ArrowUp' && n) { activeIdx = (activeIdx - 1 + n) % n; e.preventDefault(); }
+  else if (e.key === 'Enter') { e.preventDefault(); pick(activeIdx < 0 ? 0 : activeIdx); return; }
+  else if (e.key === 'Escape') { closeResults(); q.blur(); return; }
+  else return;
+  results.querySelectorAll('li').forEach((li, i) => li.classList.toggle('active', i === activeIdx));
+});
+q.addEventListener('blur', () => setTimeout(closeResults, 120));
+document.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); } });
+
+/* ---------- Phone marker + status ---------- */
+function setPhone(cur) {
+  phonePos = cur;
+  if (!cur) { if (phoneMarker) { map.removeLayer(phoneMarker); phoneMarker = null; } return; }
+  if (!phoneMarker) phoneMarker = L.marker([cur.lat, cur.lon], { icon: meIcon, zIndexOffset: 1000 }).addTo(map)
+    .bindTooltip(deviceName, { className: 'me-tip', direction: 'top', offset: [0, -14] });
+  else phoneMarker.setLatLng([cur.lat, cur.lon]);
+}
+function setPill(kind, text) { $('pill').className = 'pill ' + kind; $('pillText').textContent = text; }
+
+async function syncTrip(t) {
+  if (!t) { if (trip) clearTrip(); return; }
+  if (!trip || trip.id !== t.id) {
+    const j = await api('/api/trip');      // new trip (e.g. after reload): get its route
+    if (j.trip) showTrip(j.trip);
+  } else showTrip(t);
+}
+async function poll() {
+  try {
+    const j = await api('/api/status');
+    const d = j.devices && j.devices[0];
+    if (d) {
+      deviceName = d.name;
+      $('devName').textContent = d.name;
+      $('devInfo').textContent = `iOS ${d.ios} · ${d.connection === 'USB' ? 'Cable' : 'Wi-Fi'}`;
+    } else {
+      $('devName').textContent = 'No iPhone found';
+      $('devInfo').textContent = j.appleDevicesMissing ? 'Install Apple Devices from the Microsoft Store first' : 'Plug it in and unlock it';
+    }
+    const moving = j.trip && !j.trip.done && !j.trip.stopped && !j.trip.paused;
+    if (j.link === 'reconnecting') setPill('busy', 'Reconnecting');
+    else if (moving && d) setPill('move', 'Moving');
+    else if (j.current && d) setPill('on', 'Teleported');
+    else if (d) setPill('real', 'Real GPS');
+    else setPill('off', 'Offline');
+    await syncTrip(j.trip);
+    if (!trip?.active) setPhone(j.current);
+  } catch (e) {
+    if (e && e.locked) {
+      $('devName').textContent = 'This phone needs a new code';
+      $('devInfo').textContent = 'On your Mac, open Lester, click the phone button and scan the code';
+    } else if (IS_PHONE) {
+      $('devName').textContent = 'Can’t reach Lester';
+      $('devInfo').textContent = 'Open Lester on your Mac, and check you’re on the same Wi-Fi';
+    } else {
+      $('devName').textContent = 'Lester isn’t running';
+      $('devInfo').textContent = 'Open the Lester app to begin';
+    }
+    setPill('off', 'Offline');
+  }
+}
+
+setHow(how); setRoads(followRoads); setMode(mode); renderList();
+poll(); const pollTimer = setInterval(poll, 4000);
+api('/api/status').then(j => { if (j.current) map.setView([j.current.lat, j.current.lon], 13); }).catch(() => {});
+</script>
+</body>
+</html>
