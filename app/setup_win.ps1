@@ -88,8 +88,11 @@ if (-not (Test-Path $Uv)) {
 
 $toolsOk = $false
 if ((Test-Path $Py) -and (Test-Path $Pmd3)) {
+  # Windows PowerShell treats anything a program prints as an error when 'Stop' is on, so relax it here
+  $ErrorActionPreference = 'Continue'
   & $Py -c 'import sys; sys.exit(sys.version_info < (3, 13))' 2>$null
   $toolsOk = ($LASTEXITCODE -eq 0)
+  $ErrorActionPreference = 'Stop'
 }
 if (-not $toolsOk) {
   Notify 'Installing iPhone tools...'
@@ -97,8 +100,11 @@ if (-not $toolsOk) {
   $env:UV_TOOL_BIN_DIR = $Bin
   $env:UV_PYTHON_INSTALL_DIR = Join-Path $State 'python'
   $env:UV_NO_MODIFY_PATH = '1'
+  $ErrorActionPreference = 'Continue'   # uv prints its progress on stderr
   & $Uv tool install --python 3.13 --force pymobiledevice3 *>> $Log
-  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Pmd3)) {
+  $uvCode = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($uvCode -ne 0 -or -not (Test-Path $Pmd3)) {
     Fail "Couldn't install the iPhone tools. Check your internet connection and open Lester again."
   }
 }
