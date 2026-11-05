@@ -1,0 +1,45 @@
+# Builds Lester's two Windows programs on GitHub's Windows machines and tests Lester for Windows there.
+# Run it from the repository's Actions tab (Windows build → Run workflow). The programs come out
+# as the "windows-bin" download at the bottom of the run's page.
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["app/**", "lester.py", "index.html", "tests/test_windows.py", ".github/workflows/windows.yml"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Lester.exe and lester-sideload.exe
+        shell: bash
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          # Keep build-machine paths out of the programs
+          export CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$(cygpath -w "$PWD")=lester"$'\x1f'"--remap-path-prefix=$(cygpath -w "$HOME")=home"
+          (cd app/win_launcher && cargo build --release --target x86_64-pc-windows-msvc)
+          (cd app/sideload && cargo build --release --locked --target x86_64-pc-windows-msvc)
+          mkdir -p build/windows-bin
+          cp app/win_launcher/target/x86_64-pc-windows-msvc/release/Lester.exe build/windows-bin/
+          cp app/sideload/target/x86_64-pc-windows-msvc/release/lester-sideload.exe build/windows-bin/
+
+      - name: Install the iPhone tools the way Lester does
+        shell: pwsh
+        run: |
+          irm https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip -OutFile uv.zip
+          Expand-Archive uv.zip -DestinationPath uvbin
+          $env:UV_TOOL_DIR = "$PWD\tools"; $env:UV_TOOL_BIN_DIR = "$PWD\uvbin"
+          .\uvbin\uv.exe tool install --python 3.13 pymobiledevice3
+          .\tools\pymobiledevice3\Scripts\pymobiledevice3.exe version
+
+      - name: Test Lester for Windows
+        shell: pwsh
+        run: .\tools\pymobiledevice3\Scripts\python.exe tests\test_windows.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bin
+          path: build/windows-bin/
