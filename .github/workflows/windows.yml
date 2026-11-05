@@ -6,7 +6,12 @@ name: Windows build
 on:
   workflow_dispatch:
   push:
-    paths: ["app/**", "lester.py", "index.html", "tests/test_windows.py", ".github/workflows/windows.yml"]
+    paths: ["app/**", "lester.py", "index.html", "tests/**", ".github/workflows/windows.yml"]
+
+# A newer change cancels a build still running for an older one
+concurrency:
+  group: windows-build
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -20,8 +25,9 @@ jobs:
         shell: bash
         run: |
           rustup target add x86_64-pc-windows-msvc
-          # Keep build-machine paths out of the programs
-          export CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$(cygpath -w "$PWD")=lester"$'\x1f'"--remap-path-prefix=$(cygpath -w "$HOME")=home"
+          # Keep build-machine paths out of the programs, and build Microsoft's C runtime in
+          # (crt-static) so the programs don't need VCRUNTIME140.dll, which some PCs lack
+          export CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$(cygpath -w "$PWD")=lester"$'\x1f'"--remap-path-prefix=$(cygpath -w "$HOME")=home"$'\x1f'"-Ctarget-feature=+crt-static"
           (cd app/win_launcher && cargo build --release --target x86_64-pc-windows-msvc)
           (cd app/sideload && cargo build --release --locked --target x86_64-pc-windows-msvc)
           mkdir -p build/windows-bin
@@ -40,6 +46,23 @@ jobs:
       - name: Test Lester for Windows
         shell: pwsh
         run: .\tools\pymobiledevice3\Scripts\python.exe tests\test_windows.py
+
+      - name: Test it like a person would (double-click Lester.exe, use it, quit, open again)
+        shell: powershell
+        timeout-minutes: 25
+        run: .\tests\e2e_windows.ps1
+
+      - name: Share the test screenshots and logs
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          R="$(cygpath "$RUNNER_TEMP")/lester-results"
+          ls -la "$R" || exit 0
+          gh release delete test-results --yes --cleanup-tag || true
+          gh release create test-results "$R"/* --title "Latest Windows test results" \
+            --notes "Screenshots and logs from the Windows build's tests." --prerelease --latest=false || true
 
       - uses: actions/upload-artifact@v4
         with:
