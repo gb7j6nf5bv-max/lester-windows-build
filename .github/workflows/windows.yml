@@ -60,8 +60,8 @@ jobs:
         run: |
           R="$(cygpath "$RUNNER_TEMP")/lester-results"
           ls -la "$R" || exit 0
-          gh release delete test-results --yes --cleanup-tag || true
-          gh release create test-results "$R"/* --title "Latest Windows test results" \
+          # Each build gets its own name, so nothing has to be replaced
+          gh release create "test-results-${{ github.run_number }}" "$R"/* --title "Windows test results (build ${{ github.run_number }})" \
             --notes "Screenshots and logs from the Windows build's tests." --prerelease --latest=false || true
 
       - uses: actions/upload-artifact@v4
@@ -74,6 +74,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete windows-bin --yes --cleanup-tag || true
-          gh release create windows-bin build/windows-bin/Lester.exe build/windows-bin/lester-sideload.exe \
-            --title "Lester for Windows programs" --notes "Built and tested by the Windows build workflow." --latest=false
+          gh release create "windows-bin-${{ github.run_number }}" build/windows-bin/Lester.exe build/windows-bin/lester-sideload.exe \
+            --title "Lester for Windows programs (build ${{ github.run_number }})" --notes "Built and tested by the Windows build workflow." --latest=false
