@@ -79,6 +79,8 @@ if ($serverUp) {
   $setup = Invoke-RestMethod 'http://127.0.0.1:8765/api/iphone-setup?udid=00000000-0000000000000000'
   Check 'setup guide answers' ($setup.os -eq 'windows' -and $setup.connected -eq $false)
   Check 'setup guide can install the iPhone app helper' ($null -ne $setup.canInstall)
+  $tile = try { (Invoke-WebRequest -UseBasicParsing 'https://tile.openstreetmap.org/3/4/2.png' -Headers @{ Referer = 'http://127.0.0.1:8765/' } -UserAgent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0' -TimeoutSec 10).StatusCode } catch { $_.Exception.Response.StatusCode.value__ }
+  Check 'map pictures load with the referrer Lester now sends' ($tile -eq 200) $tile
   $py = Join-Path $State 'tools\pymobiledevice3\Scripts\python.exe'
   $out = & $py -I (Join-Path $Install 'app\lester_pair.py') '00000000-0000000000000000' 'Lester' (Join-Path $env:RUNNER_TEMP 'k.plist') 2>&1 | Out-String
   Check 'pairing tool reports a missing iPhone cleanly' ($out -match '^ERROR')
@@ -98,7 +100,10 @@ Note ("second open took {0:n0} s" -f ((Get-Date) - $t1).TotalSeconds)
 Check 'second open: tunnel again' (Wait-Until { Up 'http://127.0.0.1:49151/' } 90)
 # Opening it while it's already open just shows the window
 Start-Process -FilePath (Join-Path $Install 'Lester.exe'); Start-Sleep -Seconds 15
-Check 'opening twice keeps one server' (@(Lester-Processes | Where-Object { $_.CommandLine -match 'lester\.py' -and $_.CommandLine -notmatch 'lester_win' }).Count -eq 1)
+# (Windows lists each Python program twice: a small starter and the real one; count the starters' children once)
+$servers = @(Lester-Processes | Where-Object { $_.CommandLine -match 'lester\.py' -and $_.CommandLine -notmatch 'lester_win' })
+$serverIds = $servers | ForEach-Object { $_.ProcessId }
+Check 'opening twice keeps one server' (@($servers | Where-Object { $serverIds -notcontains $_.ParentProcessId }).Count -eq 1) ($servers.Count)
 Shot 'lester-window-again'
 # Closing the window quits Lester
 Lester-Processes | Where-Object { $_.Name -eq 'msedge.exe' -and $_.CommandLine -notmatch '--type=' } | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
