@@ -802,7 +802,7 @@ _pair_lock = threading.Lock()
 
 
 def usb_phones():
-    return [d for d in list_devices() if d["connection"] == "USB"]
+    return [d for d in _devices_or_none() if d["connection"] == "USB"]
 
 
 def dev_args(dev):
@@ -910,8 +910,17 @@ def _ios_ok(version):
         return False
 
 
+def _devices_or_none():
+    """The phone list, or none at all if the computer can't look for iPhones right now
+    (on Windows: Apple's iPhone driver isn't installed)."""
+    try:
+        return list_devices()
+    except Exception:
+        return []
+
+
 def setup_status(udid):
-    dev = next((d for d in list_devices() if d["udid"] == udid), None)
+    dev = next((d for d in _devices_or_none() if d["udid"] == udid), None)
     st = {"connected": dev is not None, "usb": bool(dev and dev["connection"] == "USB"),
           "name": dev["name"] if dev else None, "ios": dev["ios"] if dev else None,
           "iosOk": _ios_ok(dev["ios"]) if dev else None, "trusted": False, "devmode": None, "app": None,
@@ -1000,7 +1009,7 @@ def enable_devmode(udid):
 
 
 def reveal_devmode(udid):
-    dev = next((d for d in list_devices() if d["udid"] == udid), None)
+    dev = next((d for d in _devices_or_none() if d["udid"] == udid), None)
     if not dev:
         raise RuntimeError(f"Plug the iPhone into this {COMPUTER} and unlock it.")
     code, out, err = run(["amfi", "reveal-developer-mode", *dev_args(dev)], timeout=30)
