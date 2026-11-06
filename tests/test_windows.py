@@ -94,7 +94,9 @@ try:
     page = get("").decode("utf-8")
     check("server: page says PC, not Mac", "this PC" in page and "this Mac" not in page)
     check("server: page knows it's Windows", 'window.LESTER_OS = "windows"' in page)
-    check("server: PowerShell instructions", "PowerShell" in page and "⌘" not in page)
+    # The guide holds both sets of instructions and shows Windows users the PowerShell ones
+    check("server: PowerShell instructions", "Open <b>PowerShell</b>" in page and "IS_WIN ?" in page
+          and "window.LESTER_OS === 'windows'" in page)
     st = json.loads(get("api/status"))
     check("server: status works with no iPhone", st.get("devices") == [] or "error" in st, str(st)[:200])
     check("server: notices Apple Devices is missing", st.get("appleDevicesMissing") is True, str(st)[:200])
