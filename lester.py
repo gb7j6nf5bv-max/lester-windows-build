@@ -11,6 +11,7 @@ import hmac
 import json
 import math
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -832,18 +833,18 @@ def find_ios_app(dev, apps=None):
 
 def pair_phone(udid):
     if not PAIR_HELPER:
-        raise RuntimeError("The pairing tool is missing from this copy of Lester.")
+        raise RuntimeError("This copy of Lester is missing a file. Download Lester again from the website.")
     if not _pair_lock.acquire(blocking=False):
-        raise RuntimeError("Already pairing a phone. Wait for it to finish.")
+        raise RuntimeError("Already linking an iPhone. Wait a moment.")
     try:
         dev = next((d for d in usb_phones() if d["udid"] == udid), None)
         if not dev:
             raise RuntimeError(f"Plug the iPhone into this {COMPUTER} with a cable, unlock it, and try again.")
         if ios_major(dev["ios"]) < 17:
-            raise RuntimeError("Lester for iPhone needs iOS 17.4 or newer.")
+            raise RuntimeError("Your iPhone needs iOS 17.4 or newer. Update it in Settings → General → Software Update.")
         app_id = find_ios_app(dev)
         if not app_id:
-            raise RuntimeError("Install Lester for iPhone on this phone first, then pair it.")
+            raise RuntimeError("Install Lester on your iPhone first (step 3), then link it.")
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         fd, key_path = tempfile.mkstemp(prefix="pair-", suffix=".plist", dir=STATE_DIR)
         os.close(fd)
@@ -851,7 +852,7 @@ def pair_phone(udid):
             try:
                 r = subprocess.run(_pair_command(udid, key_path), capture_output=True, text=True, timeout=120)
             except subprocess.TimeoutExpired:
-                raise RuntimeError("The iPhone didn't answer in time. Unlock it, keep it plugged in, and try again.")
+                raise RuntimeError("Your iPhone didn't answer. Unlock it, keep it plugged in, and try again.")
             except OSError:
                 if IS_WINDOWS:
                     raise RuntimeError("The pairing tool couldn't start. Quit Lester and open it again.")
@@ -862,14 +863,13 @@ def pair_phone(udid):
                 if not IS_WINDOWS and ("dyld" in (r.stderr or "") or r.returncode < 0):
                     raise RuntimeError("The pairing tool needs macOS 26.5 or newer.")
                 if "PairingRejected" in detail or "authenticate" in detail:
-                    raise RuntimeError("The iPhone wasn't approved in time. Click Pair again, then on the iPhone "
-                                       "tap Trust and enter your passcode when it asks.")
-                raise RuntimeError(f"The iPhone didn't accept the pairing. Unlock it and try again. ({detail})")
+                    raise RuntimeError("Your iPhone didn't say yes in time. Click Link again, then on your iPhone "
+                                       "tap Trust and type your passcode.")
+                raise RuntimeError("Your iPhone didn't accept the link. Unlock it and click Link again.")
             code, out, err = run(["apps", "push", *tunnel_args(dev), app_id, key_path,
                                   "Documents/remote-pairing.plist"], timeout=60)
             if code != 0:
-                raise RuntimeError("Paired, but couldn't put the key into Lester for iPhone. "
-                                   "Open the app once, then try again.")
+                raise RuntimeError("Almost done: open Lester on your iPhone once, then click Link again.")
         finally:
             try:
                 os.unlink(key_path)
@@ -988,8 +988,7 @@ def _devmode_job(udid):
             except subprocess.TimeoutExpired:
                 pass
             _devmode_jobs[udid] = {"state": "passcode", "message":
-                "This iPhone has a passcode, so Apple only lets you turn Developer Mode on from the iPhone itself. "
-                "The switch is now showing: Settings → Privacy & Security → Developer Mode."}
+                "Turn it on from your iPhone: Settings → Privacy & Security → Developer Mode."}
         else:
             tail = text.strip().splitlines()[-1] if text.strip() else "unknown error"
             _devmode_jobs[udid] = {"state": "error", "message": f"Couldn't turn it on from the {COMPUTER} ({tail[:160]}). Use the steps on the iPhone instead."}
@@ -1014,7 +1013,7 @@ def reveal_devmode(udid):
         raise RuntimeError(f"Plug the iPhone into this {COMPUTER} and unlock it.")
     code, out, err = run(["amfi", "reveal-developer-mode", *dev_args(dev)], timeout=30)
     if code != 0:
-        raise RuntimeError("Couldn't show the switch. Unlock the iPhone and try again.")
+        raise RuntimeError("That didn't work. Unlock your iPhone and try again.")
     return {"ok": True}
 
 
@@ -1035,19 +1034,46 @@ def _remembered_apple_id():
         return None
 
 
+# Apple's sign-in error codes, in plain words
+APPLE_SIGNIN_ERRORS = {
+    -20101: "That Apple ID email or password is wrong. Check both and try again.",
+    -20970: "That Apple ID email or password is wrong. Check both and try again.",
+    -22406: "That Apple ID email or password is wrong. Check both and try again.",
+    -20209: "This Apple ID is locked. Unlock it at iforgot.apple.com, then try again.",
+    -20283: "Apple needs you to finish setting up this Apple ID. Sign in at account.apple.com first, then try again.",
+    -20751: "Apple needs you to finish setting up this Apple ID. Sign in at account.apple.com first, then try again.",
+    -21669: "That code wasn't right. Try again with the newest code Apple sent.",
+}
+
+
 def _friendly_install_error(text):
+    """Turns the installer's technical report into one plain sentence."""
     t = text.lower()
-    if "password" in t and ("incorrect" in t or "invalid" in t or "-20101" in t):
-        return "Apple ID or password is wrong. Check them and try again."
-    if "2fa" in t or "two-factor" in t or "verification" in t or "abort" in t:
-        return "The two-factor code wasn't accepted. Try again and use the newest code."
+    m = re.search(r"auth error (-?\d+)", t)
+    if m and int(m.group(1)) in APPLE_SIGNIN_ERRORS:
+        return APPLE_SIGNIN_ERRORS[int(m.group(1))]
+    if "password" in t and ("incorrect" in t or "invalid" in t or "wrong" in t):
+        return APPLE_SIGNIN_ERRORS[-20101]
+    if "entered incorrectly" in t:
+        return APPLE_SIGNIN_ERRORS[-20101]
+    if "no 2fa code" in t or "abort" in t:
+        return "Sign-in was cancelled. Try again whenever you're ready."
+    if "2fa" in t or "two-factor" in t or "verification" in t:
+        return "That code wasn't right. Try again with the newest code Apple sent."
     if "maximum" in t and "app id" in t:
-        return "This Apple ID has made too many app IDs this week (Apple allows 10). Try again in a few days, or use another Apple ID."
-    if "isn't connected" in t or "usbmux" in t:
-        return "The iPhone isn't connected. Plug it in with a cable and unlock it."
+        return "This Apple ID has set up too many apps this week (Apple allows 10). Try again in a few days, or use a different Apple ID."
+    if "isn't connected" in t or "usbmux" in t or "device not found" in t:
+        return "Your iPhone isn't connected. Plug it in with a cable and unlock it."
     if "developer mode" in t:
-        return "Developer Mode is off on the iPhone. Do step 2 first."
-    return text[:300]
+        return "Developer Mode is off on your iPhone. Do step 2 first."
+    if "anisette" in t or "sign-in helper" in t or "dns" in t or "connect" in t and "error" in t:
+        return "Lester couldn't reach Apple. Check your internet connection and try again."
+    # Otherwise: Apple's own message (the last line of the report), without any file paths
+    lines = [re.sub(r"^[\s●├╰│]+", "", l).strip() for l in text.splitlines()]
+    lines = [l for l in lines if l and not re.search(r"[/\\][^ ]+\.rs:\d+", l)]
+    msg = lines[-1] if lines else "Something went wrong"
+    msg = re.sub(r"^auth error -?\d+:\s*", "", msg, flags=re.I)
+    return f"Installing didn't work: {msg[:200]} Try again."
 
 
 def _install_reader(udid, proc):
@@ -1081,7 +1107,7 @@ def _install_reader(udid, proc):
             job.update(state="error", text=_friendly_install_error(str(ev.get("text", "Install failed"))))
     proc.wait()
     if job.get("state") not in ("done", "error"):
-        job.update(state="error", text="The installer stopped unexpectedly. Try again.")
+        job.update(state="error", text="Installing stopped before it finished. Try again.")
     _install_procs.pop(udid, None)
 
 
@@ -1114,7 +1140,28 @@ def start_install(udid, apple_id, password, remember):
                                  "ipa": str(IPA_FILE)}) + "\n")
     proc.stdin.flush()
     threading.Thread(target=_install_reader, args=(udid, proc), daemon=True).start()
+    threading.Thread(target=_install_watchdog, args=(udid, proc), daemon=True).start()
     return _install_jobs[udid]
+
+
+SIGNIN_TIMEOUT = 120   # seconds Apple gets to answer a sign-in
+
+
+def _install_watchdog(udid, proc):
+    """A sign-in that never answers ends with a message instead of spinning forever.
+    (Waiting for a two-factor code or a choice doesn't count.)"""
+    started = time.time()
+    while proc.poll() is None:
+        time.sleep(2)
+        job = _install_jobs.get(udid) or {}
+        if job.get("state") != "running" or job.get("text") != "Signing in to Apple…":
+            started = time.time()
+            continue
+        if time.time() - started > SIGNIN_TIMEOUT:
+            proc.kill()
+            job.update(state="error", text="Apple didn't answer. Check your internet connection and try again."
+                       + ("" if IS_WINDOWS else " If your Mac asked to use the keychain, click Always Allow."))
+            return
 
 
 def answer_install(udid, data):
