@@ -299,6 +299,10 @@
   .gbody .qrmini svg { width: 100%; height: 100%; display: block; }
   .gbody .ok { color: var(--text); font-weight: 600; }
   .gbody .bad { color: var(--red); }
+  .gbody .errbox { display: block; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(255,42,60,.12); border: 1px solid rgba(255,42,60,.45); color: var(--text); font-weight: 600; }
+  .gbody details.more { margin-top: 8px; font-size: 13px; }
+  .gbody details.more summary { cursor: pointer; color: var(--muted); }
+  .gbody details.more ol { margin: 8px 0 0; padding-left: 18px; }
   .gbody .signin { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
   .gfield { height: 40px; border-radius: 11px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 14px; padding: 0 12px; min-width: 0; }
   .gfield:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
@@ -459,7 +463,7 @@
 
     <div class="sec">
       <p class="label">Set up Lester for iPhone</p>
-      <p class="hint">Lets your iPhone change its own location, without this Mac. Plug the iPhone in, unlock it, and follow the steps. Lester checks each one for you.</p>
+      <p class="hint">Put Lester on your iPhone so it can change its location on its own, without this Mac. Plug in your iPhone, then follow the steps. Each step ticks itself off when it’s done.</p>
       <div class="pairrow">
         <select id="pairPhone" aria-label="iPhone to set up"></select>
         <button class="ghost" id="setupRefresh" title="Check again">
@@ -882,71 +886,85 @@ async function refreshGuide() {
   renderGuide();
 }
 let guideOpen = null, guideSig = '', guideDone = [], renewing = false;
+const IS_WIN = window.LESTER_OS === 'windows';
+const COMP = IS_WIN ? 'PC' : 'Mac';
 function installHtml(st) {
   const job = st.installJob || {};
   if (!st.canInstall) {
-    return 'Download the app, then install it with a free sideloading app such as <b>Sideloadly</b> or <b>AltStore</b>, signing in with your Apple ID.' +
-      '<div class="acts"><button class="act" data-act="download"><span>⬇ Download Lester for iPhone</span></button></div>';
+    return 'Download the Lester app file, then put it on your iPhone with a free app such as <b>Sideloadly</b>.' +
+      '<div class="acts"><button class="act" data-act="download"><span>⬇ Download the app file</span></button></div>';
   }
   if (job.state === 'running') {
     return `<b>${esc(job.text || 'Working…')}</b>` +
       `<div class="gprog"><div class="bar"><i style="width:${Math.round((job.progress || 0) * 100)}%"></i></div><span>${Math.round((job.progress || 0) * 100)}%</span></div>` +
-      'Keep the iPhone plugged in and unlocked.<div class="acts"><button class="act white small" data-act="install-cancel"><span>Cancel</span></button></div>';
+      'This takes about a minute. Keep your iPhone plugged in and unlocked.<div class="acts"><button class="act white small" data-act="install-cancel"><span>Cancel</span></button></div>';
   }
   if (job.state === '2fa') {
     const others = (job.numbers || []).map(n => `<button class="act white small" data-act="tfa-sms" data-id="${n.id}"><span>Text ${esc(n.number)}</span></button>`).join('');
-    return `<b>${esc(job.text)}</b>` + (job.lastError ? `<br>${esc(job.lastError)}` : '') +
+    return (job.lastError ? `<span class="errbox">That code didn’t work. Try the newest one.</span>` : '') +
+      `<b>Apple sent you a 6-digit code.</b> ` + (job.sms ? 'Check your text messages.' : 'Look on your iPhone or another Apple device signed in to this Apple ID, tap <b>Allow</b>, and you’ll see the code.') +
       '<div class="cmd"><input class="gfield" id="tfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6-digit code">' +
       '<button class="act" data-act="tfa-submit"><span>Continue</span></button></div>' +
       `<div class="acts"><button class="act white small" data-act="tfa-resend"><span>Send a new code</span></button>${job.sms ? '<button class="act white small" data-act="tfa-devices"><span>Send to my devices</span></button>' : ''}${others}</div>`;
   }
   if (job.state === 'certs') {
-    return `<b>${esc(job.text)}</b> Apps signed with the one you replace stop opening until they’re signed again.` +
+    return '<b>This Apple ID is already being used to install apps on other computers.</b> Apple only allows a few, so pick one to replace. ' +
+      'Apps installed from the one you replace will stop opening until they’re installed again.' +
       '<div class="certs">' + (job.certs || []).map((c, i) =>
         `<label><input type="radio" name="cert" value="${esc(c.serial)}" ${i === 0 ? 'checked' : ''}> ${esc(c.name)}${c.machine ? ` <span>(${esc(c.machine)})</span>` : ''}</label>`).join('') + '</div>' +
       '<div class="acts"><button class="act" data-act="cert-replace"><span>Replace it</span></button><button class="act white small" data-act="install-cancel"><span>Cancel</span></button></div>';
   }
-  return (job.state === 'error' ? `<b class="bad">${esc(job.text)}</b><br>` : '') +
-    'Sign in with your Apple ID and Lester signs and installs the app for you, like Xcode does. A free Apple ID works. ' +
-    'Your password goes only to Apple and is never saved. You can use a spare Apple ID if you prefer.' +
+  return (job.state === 'error' ? `<span class="errbox">${esc(job.text)}</span>` : '') +
+    'Sign in with your <b>Apple ID</b>: the email and password you use for the App Store. Lester uses it to put the app on your iPhone. ' +
+    'Your password only goes to Apple and is never saved.' +
     `<div class="signin"><input class="gfield" id="aid" type="email" autocomplete="username" placeholder="Apple ID email" value="${esc(st.appleId || '')}">` +
-    '<input class="gfield" id="apw" type="password" autocomplete="current-password" placeholder="Password"></div>' +
-    '<label class="remember"><input type="checkbox" id="aidRemember" checked> Remember my Apple ID email on this Mac</label>' +
-    '<div class="acts"><button class="act" data-act="install"><span>Install Lester for iPhone</span></button></div>' +
-    '<span class="alt">Prefer a sideloading app? <button class="linkbtn" data-act="download">Download the .ipa</button></span>';
+    '<input class="gfield" id="apw" type="password" autocomplete="current-password" placeholder="Apple ID password"></div>' +
+    `<label class="remember"><input type="checkbox" id="aidRemember" checked> Remember my email on this ${COMP}</label>` +
+    '<div class="acts"><button class="act" data-act="install"><span>Install Lester on my iPhone</span></button></div>' +
+    '<span class="alt">Already use a sideloading app? <button class="linkbtn" data-act="download">Download the app file</button></span>';
 }
 function guideSteps(st) {
-  const job = st.devmodeJob || {};
+  const trustHelp = IS_WIN
+    ? 'Nothing popped up? Open the <b>Apple Devices</b> app on this PC, click your iPhone, then click <b>Trust</b>.'
+    : 'Nothing popped up? Unplug the cable and plug it back in. Or open <b>Finder</b>, click your iPhone on the left, then click <b>Trust</b>.';
+  const terminalHelp = IS_WIN
+    ? 'Open <b>PowerShell</b>: press the <b>Windows key</b>, type <b>PowerShell</b> and press <b>Enter</b>. Click <b>Copy</b> below, right-click in the PowerShell window to paste, then press <b>Enter</b>.'
+    : 'Open <b>Terminal</b>: press <b>⌘ and Space</b>, type <b>Terminal</b> and press <b>Return</b>. Click <b>Copy</b> below, press <b>⌘ V</b> in Terminal to paste, then press <b>Return</b>.';
   return [
-    { title: 'Plug in and trust this Mac', done: !!st.trusted,
-      html: !st.connected && appleDevicesMissing ? 'Windows needs Apple’s iPhone driver first. Install the free <b>Apple Devices</b> app from the Microsoft Store, then plug the iPhone in with a cable and unlock it.' +
+    { title: 'Plug in your iPhone', done: !!st.trusted,
+      html: !st.connected && appleDevicesMissing ? 'First, install the free <b>Apple Devices</b> app from the Microsoft Store. It lets this PC talk to your iPhone. Then plug in your iPhone with a cable.' +
           '<div class="acts"><button class="act" data-act="apple-devices"><span>Get Apple Devices</span></button></div>'
-        : !st.connected ? 'Plug the iPhone into this Mac with a cable and unlock it.'
-        : st.unreachable ? 'The iPhone isn’t answering. Unlock it, or plug it in with a cable, and Lester checks again.'
-        : st.iosOk === false ? `This iPhone has iOS ${esc(st.ios)}. Lester for iPhone needs <b>iOS 17.4 or newer</b>: update it in <b>Settings → General → Software Update</b>.`
-        : 'Unlock the iPhone. When it asks, tap <b>Trust</b> and enter its passcode.<br>No prompt? Open <b>Finder</b>, click the iPhone in the sidebar, then click <b>Trust</b>.',
-      doneHtml: `<span class="ok">${esc(st.name || 'Your iPhone')} trusts this Mac.</span>` },
+        : !st.connected ? `Connect your iPhone to this ${COMP} with a charging cable, then unlock it.`
+        : st.unreachable ? 'Your iPhone isn’t answering. Unlock it and check the cable is plugged in.'
+        : st.iosOk === false ? `Your iPhone needs an update first (it has iOS ${esc(st.ios)}; Lester needs iOS 17.4 or newer). On your iPhone, go to <b>Settings → General → Software Update</b>.`
+        : `Unlock your iPhone. When it asks <b>“Trust This Computer?”</b>, tap <b>Trust</b> and type your iPhone passcode.<br><br>${trustHelp}`,
+      doneHtml: `<span class="ok">${esc(st.name || 'Your iPhone')} is connected.</span>` },
     { title: 'Turn on Developer Mode', done: st.devmode === true,
-      html: '<ol class="mini">' +
-        '<li>On the iPhone, open <b>Settings → Privacy & Security → Developer Mode</b>. Turn it on and tap <b>Restart</b>. After it restarts, tap <b>Turn On</b> and enter the passcode.</li>' +
-        '<li><b>Don’t see Developer Mode?</b> Keep the iPhone plugged in and run this command on this Mac: open <b>Terminal</b> (press <b>⌘ Space</b>, type <b>Terminal</b>, press <b>Return</b>), paste it and press <b>Return</b>.' +
-        (st.revealCommand ? `<div class="cmd" style="margin-top:6px"><code>${esc(st.revealCommand)}</code><button class="act white small" data-act="copycmd"><span>Copy</span></button></div>` : '') + '</li>' +
-        '<li>The <b>Developer Mode</b> switch now shows at the bottom of <b>Settings → Privacy & Security</b> (close and reopen Settings if needed). Then do point 1.</li></ol>',
+      html: 'This setting lets apps like Lester change your location. On your iPhone:' +
+        '<ol class="mini">' +
+        '<li>Open <b>Settings</b>, then tap <b>Privacy & Security</b>.</li>' +
+        '<li>Scroll all the way down and tap <b>Developer Mode</b>. Turn it on.</li>' +
+        '<li>Tap <b>Restart</b>. When your iPhone turns back on, tap <b>Turn On</b> and type your passcode.</li></ol>' +
+        `<br><b>Can’t find Developer Mode?</b> Click this button, then close and reopen Settings on your iPhone:` +
+        '<div class="acts"><button class="act white small" data-act="reveal"><span>Show Developer Mode on my iPhone</span></button></div>' +
+        (st.revealCommand ? `<details class="more"><summary>Still not there? Try this instead</summary><ol><li>${terminalHelp}</li>` +
+          `<li><div class="cmd" style="margin-top:6px"><code>${esc(st.revealCommand)}</code><button class="act white small" data-act="copycmd"><span>Copy</span></button></div></li>` +
+          '<li>Close and reopen Settings on your iPhone. Developer Mode is at the bottom of <b>Privacy & Security</b>.</li></ol></details>' : ''),
       doneHtml: '<span class="ok">Developer Mode is on.</span>' },
-    { title: 'Install Lester for iPhone', done: !!st.app && !renewing && !['running', '2fa', 'certs'].includes((st.installJob || {}).state),
+    { title: 'Install Lester on your iPhone', done: !!st.app && !renewing && !['running', '2fa', 'certs'].includes((st.installJob || {}).state),
       html: installHtml(st),
-      doneHtml: '<span class="ok">Lester for iPhone is installed.</span> Apple’s free signing lasts 7 days: renew it here each week (Lester on the iPhone reminds you).' +
+      doneHtml: '<span class="ok">Lester is on your iPhone.</span> Apple makes free apps like this expire after 7 days. Once a week, plug in your iPhone here and click <b>Renew</b>. Lester on your iPhone reminds you the day before.' +
         (st.canInstall ? '<div class="acts"><button class="act white" data-act="renew"><span>Renew now</span></button></div>' : '') },
-    { title: 'Install LocalDevVPN', done: !!st.vpn,
-      html: 'It’s free on the App Store. Scan this with the iPhone’s Camera, or search the App Store for <b>LocalDevVPN</b>.', qr: st.vpnUrl,
+    { title: 'Get the LocalDevVPN app', done: !!st.vpn,
+      html: 'Lester needs this free app to work on your iPhone. Point your iPhone’s <b>Camera</b> at this code and tap the link, or search the App Store for <b>LocalDevVPN</b>. Install it.', qr: st.vpnUrl,
       doneHtml: '<span class="ok">LocalDevVPN is installed.</span>' },
-    { title: 'Pair Lester with this iPhone', done: !!st.paired,
-      html: (st.connected && !st.usb ? '<b>Plug in the cable for this step:</b> iPhones only allow new pairings over a cable.<br>' : '') +
-        'Keep the iPhone unlocked. When it asks, tap <b>Trust</b> and enter the passcode. You only do this once.',
-      actions: [{ id: 'pair', label: 'Pair', disabled: !(st.trusted && st.devmode && st.app && st.usb) }],
-      doneHtml: '<span class="ok">Paired.</span>' },
-    { title: 'Start using it', done: false, final: true,
-      html: 'On the iPhone, open <b>LocalDevVPN</b> and tap <b>Connect</b>, then open <b>Lester</b> and teleport.<br>Renew Lester every 7 days. Lester reminds you a day before.' },
+    { title: 'Link Lester to your iPhone', done: !!st.paired,
+      html: (st.connected && !st.usb ? '<b>Plug in the cable for this step.</b> ' : '') +
+        'Keep your iPhone unlocked and click <b>Link</b>. If your iPhone asks, tap <b>Trust</b> and type your passcode. You only do this once.',
+      actions: [{ id: 'pair', label: 'Link', disabled: !(st.trusted && st.devmode && st.app && st.usb) }],
+      doneHtml: '<span class="ok">Linked.</span>' },
+    { title: 'You’re ready!', done: false, final: true,
+      html: 'On your iPhone:<ol class="mini"><li>Open <b>LocalDevVPN</b> and tap <b>Connect</b>.</li><li>Open <b>Lester</b> and pick a place.</li></ol><br>That’s it. You can unplug your iPhone. Remember to plug it in here once a week to renew.' },
   ];
 }
 function renderGuide() {
@@ -1029,7 +1047,7 @@ $('guide').addEventListener('click', async e => {
     return;
   }
   if (act === 'copycmd') {
-    navigator.clipboard?.writeText(setupState?.revealCommand || '').then(() => toast('Copied. Paste it into Terminal and press Return.'));
+    navigator.clipboard?.writeText(setupState?.revealCommand || '').then(() => toast(IS_WIN ? 'Copied. Right-click in PowerShell to paste, then press Enter.' : 'Copied. Press ⌘ V in Terminal to paste, then press Return.'));
     return;
   }
   if (act === 'devmode') {
@@ -1051,17 +1069,17 @@ $('guide').addEventListener('click', async e => {
   }
   if (!udid) return;
   if (act === 'reveal') {
-    try { await api('/api/iphone-setup/reveal', { udid }); toast('Done. Now check Settings → Privacy & Security on the iPhone.'); }
+    try { await api('/api/iphone-setup/reveal', { udid }); toast('Done. On your iPhone, close and reopen Settings, then look in Privacy & Security.'); }
     catch (err) { toast(err.message, 'err'); }
     return;
   }
   if (act === 'pair') {
-    pairMessage('Look at your iPhone: unlock it, then tap Trust and enter your passcode when it asks.', 'ok');
-    await busy(btn, 'Pairing…', async () => {
+    pairMessage('Look at your iPhone: keep it unlocked, and tap Trust if it asks.', 'ok');
+    await busy(btn, 'Linking…', async () => {
       try {
         const j = await api('/api/pair-phone', { udid });
-        pairMessage(`Paired ${j.device}. On the iPhone, connect LocalDevVPN, open Lester and teleport.`, 'ok');
-        toast(`${j.device} is paired with Lester for iPhone`);
+        pairMessage(`${j.device} is linked. On your iPhone, open LocalDevVPN and tap Connect, then open Lester.`, 'ok');
+        toast(`${j.device} is linked`);
       } catch (err) { pairMessage(err.message, 'err'); throw err; }
     });
     refreshGuide();
@@ -1080,8 +1098,10 @@ $('guide').addEventListener('keydown', e => {
 let installTimer = null;
 function pollInstall() {
   clearTimeout(installTimer);
-  const s = (setupState?.installJob || {}).state;
+  const job = setupState?.installJob || {}, s = job.state;
   if (s === 'done') renewing = false;
+  if (s === 'error' && pollInstall.last !== 'error') { toast(job.text, 'err'); guideOpen = 2; guideSig = ''; renderGuide(); setTimeout(() => $('apw')?.focus(), 50); }
+  pollInstall.last = s;
   if (['running', '2fa', 'certs'].includes(s) && !$('phoneSheet').hidden) installTimer = setTimeout(async () => { await refreshGuide(); pollInstall(); }, 1500);
 }
 // While the screen is open, keep checking so steps tick off as you do them on the iPhone
