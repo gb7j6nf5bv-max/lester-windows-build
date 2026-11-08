@@ -962,7 +962,9 @@ function guideSteps(st) {
       html: (st.connected && !st.usb ? '<b>Plug in the cable for this step.</b> ' : '') +
         'Keep your iPhone unlocked and click <b>Link</b>. If your iPhone asks, tap <b>Trust</b> and type your passcode. You only do this once.',
       actions: [{ id: 'pair', label: 'Link', disabled: !(st.trusted && st.devmode && st.app && st.usb) }],
-      doneHtml: '<span class="ok">Linked.</span>' },
+      doneHtml: '<span class="ok">Linked.</span> If Lester on your iPhone says it can’t connect, plug in your iPhone and link it again.' +
+        `<div class="acts"><button class="act white small" data-act="pair" ${st.trusted && st.app && st.usb ? '' : 'disabled'}><span>Link again</span></button></div>` +
+        (st.usb ? '' : '<span class="alt">Plug in the cable to link again.</span>') },
     { title: 'You’re ready!', done: false, final: true,
       html: 'On your iPhone:<ol class="mini"><li>Open <b>LocalDevVPN</b> and tap <b>Connect</b>.</li><li>Open <b>Lester</b> and pick a place.</li></ol><br>That’s it. You can unplug your iPhone. Remember to plug it in here once a week to renew.' },
   ];
