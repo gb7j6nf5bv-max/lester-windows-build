@@ -902,6 +902,26 @@ def _mark_paired(udid):
         pass
 
 
+def _unmark_paired(udid):
+    """Installing or renewing Lester for iPhone can wipe its saved link, so it isn't linked any more."""
+    try:
+        PAIRED_FILE.write_text(json.dumps(sorted(_paired_set() - {udid})))
+    except OSError:
+        pass
+
+
+def _relink_after_install(udid, job):
+    """Links Lester for iPhone again straight after it's installed or renewed (the install
+    can wipe the old link). If that doesn't work, the guide's Link step asks for it."""
+    job.update(text="Lester is on your iPhone. Linking it…")
+    try:
+        pair_phone(udid)
+        job.update(text="Lester is on your iPhone and linked.")
+    except Exception as e:
+        job.update(text="Lester is on your iPhone. Now do step 5 to link it.")
+        print(f"Re-link after install didn't work: {e}")
+
+
 def _ios_ok(version):
     try:
         parts = [int(x) for x in str(version).split(".")[:2]] + [0]
@@ -1102,7 +1122,9 @@ def _install_reader(udid, proc):
                       "machine": str(c.get("machine") or "")[:80]} for c in (ev.get("certs") or [])[:10] if isinstance(c, dict)]
             job.update(state="certs", certs=certs, text="Your Apple ID already has the most certificates Apple allows. Pick one to replace.")
         elif kind == "done":
+            _unmark_paired(udid)
             job.update(state="done", text="Lester for iPhone is installed.", progress=1.0, installedAt=time.time())
+            threading.Thread(target=_relink_after_install, args=(udid, job), daemon=True).start()
         elif kind == "error":
             job.update(state="error", text=_friendly_install_error(str(ev.get("text", "Install failed"))))
     proc.wait()
